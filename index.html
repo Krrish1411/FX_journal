@@ -1465,14 +1465,15 @@ canvas { display: block; }
         <div class="form-group"><label class="form-label">Close Time</label>
           <input type="time" class="form-input" id="t-close-time"></div>
       </div>
+      <div class="form-row3">
         <div class="form-group"><label class="form-label">Symbol</label>
           <select class="form-select" id="t-symbol"></select></div>
         <div class="form-group"><label class="form-label">Direction</label>
           <select class="form-select" id="t-dir"><option>Long</option><option>Short</option></select></div>
-      </div>
-      <div class="form-row3">
         <div class="form-group"><label class="form-label">Session</label>
           <select class="form-select" id="t-session"></select></div>
+      </div>
+      <div class="form-row3">
         <div class="form-group"><label class="form-label">SMC Setup</label>
           <select class="form-select" id="t-setup">
             <option>A+ Setup</option>
@@ -1489,9 +1490,8 @@ canvas { display: block; }
           </select></div>
         <div class="form-group"><label class="form-label">Structure</label>
           <select class="form-select" id="t-struct"><option>Bullish</option><option>Bearish</option><option>Ranging</option></select></div>
-      </div>
-      <div class="form-row4">
-        <div class="form-group"><label class="form-label">Timeframe</label>
+        <div class="form-group">
+          <label class="form-label">Timeframe</label>
           <select class="form-select" id="t-tf" onchange="st.tradeTF=this.value">
             <option value="M1">M1</option>
             <option value="M5">M5</option>
@@ -1502,36 +1502,38 @@ canvas { display: block; }
             <option value="Weekly">Weekly</option>
           </select>
         </div>
+      </div>
+      <div class="form-row3">
         <div class="form-group"><label class="form-label">Entry</label>
-          <input type="number" class="form-input mono" id="t-entry" step="0.00001" oninput="calcRR()"></div>
+          <input type="number" class="form-input mono" id="t-entry" step="0.00001" oninput="calcRR()" placeholder="Entry"></div>
         <div class="form-group"><label class="form-label">Stop Loss</label>
-          <input type="number" class="form-input mono" id="t-sl" step="0.00001" oninput="calcRR()" style="color:var(--red2)"></div>
-        <div class="form-group"><label class="form-label">Take Profit (Plan)</label>
-          <input type="number" class="form-input mono" id="t-tp" step="0.00001" oninput="calcRR()" style="color:var(--green2)"></div>
+          <input type="number" class="form-input mono" id="t-sl" step="0.00001" oninput="calcRR()" style="color:var(--red2)" placeholder="SL"></div>
+        <div class="form-group"><label class="form-label">TP (Plan)</label>
+          <input type="number" class="form-input mono" id="t-tp" step="0.00001" oninput="calcRR()" style="color:var(--green2)" placeholder="TP"></div>
       </div>
-      <!-- Actual Exit Price row -->
-      <div class="form-row4">
+      
+      <div class="form-row3">
         <div class="form-group">
-          <label class="form-label" style="color:var(--accent2)">✦ Actual Exit Price</label>
-          <input type="number" class="form-input mono" id="t-exit" step="0.00001" oninput="calcRR()" style="border-color:var(--accent);color:var(--accent2)" placeholder="Where trade closed?"></div>
+          <label class="form-label" style="color:var(--accent2);font-weight:600">✦ Exit Price</label>
+          <input type="number" class="form-input mono" id="t-exit" step="0.00001" oninput="calcRR()" style="border-color:var(--accent);color:var(--accent2)" placeholder="Exit Price">
+        </div>
         <div class="form-group"><label class="form-label">Lot Size</label>
-          <input type="number" class="form-input mono" id="t-lots" step="0.01"></div>
-        <div class="form-group"><label class="form-label">P&L ($) <span style="font-size:10px;color:var(--text3)">enter or auto</span></label>
-          <input type="number" class="form-input mono" id="t-pnl" step="0.01" placeholder="±amount">
-        </div>
-        <div class="form-group"><label class="form-label">Commission ($)</label>
-          <input type="number" class="form-input mono" id="t-comm" step="0.01" placeholder="0.00"></div>
+          <input type="number" class="form-input mono" id="t-lots" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label class="form-label">P&L ($)</label>
+          <input type="number" class="form-input mono" id="t-pnl" step="0.01" placeholder="\u00B1amount"></div>
       </div>
-      <!-- R:R display row -->
-      <div class="form-row" style="gap:8px">
-        <div class="form-group" style="flex:1">
-          <label class="form-label">Planned R:R <span id="t-rr-badge" style="font-weight:400;color:var(--text3)">(Entry → TP)</span></label>
-          <input type="text" class="form-input mono" id="t-rr-disp" readonly style="color:var(--gold2);font-weight:600">
+
+      <div class="form-row3">
+        <div class="form-group">
+          <label class="form-label">Planned R:R</label>
+          <input type="text" class="form-input mono" id="t-rr-disp" readonly style="color:var(--gold2);font-weight:600" placeholder="\u2014">
         </div>
-        <div class="form-group" style="flex:1" id="actual-rr-group">
-          <label class="form-label" style="color:var(--accent2)">✦ Actual R:R <span style="font-weight:400;color:var(--text3)">(Entry → Exit)</span></label>
-          <input type="text" class="form-input mono" id="t-actual-rr" readonly style="color:var(--accent2);font-weight:600" placeholder="Set exit price">
+        <div class="form-group">
+          <label class="form-label" style="color:var(--accent2)">✦ Actual R:R</label>
+          <input type="text" class="form-input mono" id="t-actual-rr" readonly style="color:var(--accent2);font-weight:600" placeholder="\u2014">
         </div>
+        <div class="form-group"><label class="form-label">Comm ($)</label>
+          <input type="number" class="form-input mono" id="t-comm" step="0.01" value="0.00"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Trade Grade</label>
@@ -2231,27 +2233,36 @@ function getColor(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+function getAcctOffset(a) {
+  if (!a) return 0;
+  const bal = parseFloat(a.balance)||0;
+  const manual = (a.manualBalance !== undefined && a.manualBalance !== null) ? parseFloat(a.manualBalance) : bal;
+  return manual - bal;
+}
+
 // ══════════════════════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════════════════════
 function renderDash() {
   updateSidebar();
   const trades = activeTrades();
+  const a = acct();
+  const offset = getAcctOffset(a);
+  const totalPnL = trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0), 0) + offset;
   const wins = trades.filter(t=>parseFloat(t.pnl)>0);
   const losses = trades.filter(t=>parseFloat(t.pnl)<0);
-  const totalPnL = trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0), 0);
   const gp = wins.reduce((s,t)=>s+(parseFloat(t.pnl)||0), 0);
   const gl = Math.abs(losses.reduce((s,t)=>s+(parseFloat(t.pnl)||0), 0));
   const wr = trades.length ? (wins.length/trades.length*100).toFixed(1) : 0;
   const pf = gl>0 ? (gp/gl).toFixed(2) : gp>0 ? '∞' : '—';
 
-  // Avg R:R
-  const rrTrades = trades.filter(t=>t.entry&&t.sl&&t.tp);
-  const avgRR = rrTrades.length ? (rrTrades.reduce((s,t)=>{
-    const r=Math.abs(parseFloat(t.entry)-parseFloat(t.sl));
-    const w=Math.abs(parseFloat(t.tp)-parseFloat(t.entry));
-    return s+(r>0?w/r:0);
-  },0)/rrTrades.length).toFixed(2) : '—';
+  // Avg R:R (based on actual)
+  const actualRRTrades = trades.filter(t => t.actualRR && t.actualRR !== '\u2014' && t.actualRR !== '—');
+  const avgRRValue = actualRRTrades.length ? (actualRRTrades.reduce((s,t)=>{
+    let rrStr = String(t.actualRR).replace(/[^\d.-]/g, '');
+    let val = parseFloat(rrStr) || 0;
+    return s + val;
+  },0)/actualRRTrades.length).toFixed(2) : '\u2014';
 
   const pnlEl = document.getElementById('d-pnl');
   pnlEl.textContent = (totalPnL>=0?'+$':'-$')+Math.abs(totalPnL).toFixed(2);
@@ -2264,7 +2275,7 @@ function renderDash() {
   document.getElementById('d-wr').textContent = wr+'%';
   document.getElementById('d-wl').textContent = `${wins.length}W · ${losses.length}L`;
   document.getElementById('d-pf').textContent = pf;
-  document.getElementById('d-rr').textContent = avgRR==='—' ? '—' : '1:'+avgRR;
+  document.getElementById('d-rr').textContent = avgRRValue==='\u2014' ? '\u2014' : '1:'+avgRRValue;
 
   renderEquityChart(trades);
   renderPFDashBar();
@@ -2293,12 +2304,11 @@ function renderEquityChart(trades, range) {
   else if (range==='30d') { const d=new Date(now-30*86400000); sorted=sorted.filter(t=>new Date(t.date)>=d); }
   else if (range==='3m') { const d=new Date(now-90*86400000); sorted=sorted.filter(t=>new Date(t.date)>=d); }
 
-  // Determine curve mode: 'profit' (cumulative P&L from 0) or 'equity' (balance + cumulative P&L)
+  // Determine curve mode: 'profit' (cumulative P\u0026L) or 'equity' (balance + cumulative P\u0026L)
   const curveTypeEl = document.getElementById('eq-curve-type');
   const curveMode = curveTypeEl ? curveTypeEl.value : 'profit';
-  
-  // Manual balance override
-  const startBalance = (a?.manualBalance !== undefined && a?.manualBalance !== null) ? parseFloat(a.manualBalance) : parseFloat(a?.balance||0);
+  const offset = getAcctOffset(a);
+  const startBalance = curveMode === 'equity' ? (parseFloat(a?.balance || 0) + offset) : offset;
   
   // Fresh start date filter
   if (a?.freshStartDate) {
@@ -2314,19 +2324,19 @@ function renderEquityChart(trades, range) {
   if (sorted.length || curveMode === 'equity') {
     const firstDate = sorted.length ? sorted[0].date : (a?.freshStartDate || todayStr());
     labels.push(fmtDateShort(firstDate, true));
-    values.push(curveMode === 'equity' ? startBalance : 0);
+    values.push(parseFloat(startBalance.toFixed(2)));
     tooltipDates.push(firstDate);
   }
 
   sorted.forEach(t => {
     cum += parseFloat(t.pnl)||0;
     labels.push(fmtDateShort(t.date, false));
-    values.push(parseFloat((curveMode === 'equity' ? startBalance + cum : cum).toFixed(2)));
+    values.push(parseFloat((startBalance + cum).toFixed(2)));
     tooltipDates.push(t.date);
   });
 
-  const lastVal = values.length ? values[values.length-1] : 0;
-  const baseVal = curveMode === 'equity' ? startBalance : 0;
+  const lastVal = values.length ? values[values.length-1] : startBalance;
+  const baseVal = startBalance;
   const isUp = lastVal >= baseVal;
   const lineColor = isUp ? '#3fb950' : '#f85149';
   const fillGrad = { id: 'eqGrad' }; // gradient created in chart plugin
@@ -2492,13 +2502,10 @@ function fmtDateShort(dateStr, isStart) {
 function renderPFDashBar() {
   const bar = document.getElementById('pf-dash-bar');
   if (!bar) return;
-  const a = acct();
-  if (!a || a.type !== 'Prop Firm' || !a.pfRules) {
-    bar.style.display = 'none';
-    return;
-  }
   const trades = activeTrades();
-  const totalPnL = trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
+  const a = acct();
+  const offset = getAcctOffset(a);
+  const totalPnL = trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0) + offset;
   const today = todayStr();
   const todayPnL = trades.filter(t=>t.date===today).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
   const bal = (a.manualBalance !== undefined && a.manualBalance !== null) ? parseFloat(a.manualBalance) : (parseFloat(a.balance)||0);
@@ -2531,10 +2538,11 @@ function renderPFDashBar() {
   bar.style.flexWrap = 'wrap';
   bar.style.gap = '16px';
   bar.innerHTML = [
+    stat('Initial Offset', (offset>=0?'+$':'-$')+Math.abs(offset).toFixed(2), '', offset>=0?'var(--green2)':'var(--red2)'),
     stat('Daily DD Used',
       `${dailyDDUsed.toFixed(2)}% / ${dailyDDPct}%`,
       progBar(dailyDDPct>0?dailyDDUsed/dailyDDPct*100:0, dailyDDUsed>dailyDDPct*0.8?'#f85149':'#d4a017', 'var(--bg3)'),
-      dailyDDUsed>dailyDDPct*0.8?'#f85149':'var(--gold2)'
+      dailyDDUsed > dailyDDPct ? 'var(--red2)' : ''
     ),
     stat('Max DD Used',
       `${totalDDUsed.toFixed(2)}% / ${maxDDPct}%`,
@@ -3068,11 +3076,13 @@ function calcRR() {
   const actualEl = document.getElementById('t-actual-rr');
   if (actualEl) {
     if (entry && sl && exit && risk > 0) {
+      const isProfit = dir === 'Long' ? exit >= entry : exit <= entry;
       const actualReward = Math.abs(exit - entry);
-      const actualRR = (actualReward / risk).toFixed(2);
-      const isProfit = dir === 'Long' ? exit > entry : exit < entry;
-      actualEl.value = (isProfit ? '+' : '-') + '1:' + actualRR;
+      const valRR = (actualReward / risk).toFixed(2);
+      const displayRR = (isProfit ? '+' : '-') + valRR;
+      actualEl.value = displayRR;
       actualEl.style.color = isProfit ? 'var(--green2)' : 'var(--red2)';
+      st.tradeActualRR = displayRR; 
     } else {
       actualEl.value = entry && sl && exit ? '—' : '';
       actualEl.style.color = 'var(--text3)';
@@ -3218,6 +3228,7 @@ function saveTrade() {
     checklist: Array.from(document.querySelectorAll('#modal-chk-list .chk-item')).map((el, i) => el.classList.contains('done') ? i : -1).filter(i => i !== -1),
     rr: savedRR,
     plannedRR,
+    actualRR: actualRR || '\u2014',
     screenshots: [...st.tradeSS],
     tags: [...st.tradeTags],
     journalNotes: st.editTradeId ? (DB.trades.find(t=>t.id===st.editTradeId)?.journalNotes||'') : '',
@@ -3235,6 +3246,7 @@ function saveTrade() {
   checkRules();
   renderDash();
   renderTrades();
+  renderAccounts();
   renderJournal();
   toast(st.editTradeId?'Trade updated':'Trade saved',`${symbol} ${trade.direction}`,'success');
 }
@@ -3758,9 +3770,11 @@ function renderAccounts() {
     const trades = a.freshStartDate
       ? allTrades.filter(t=>t.date>=a.freshStartDate)
       : allTrades;
-    const pnl=trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
+    const offset = getAcctOffset(a);
+    const pnl = trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0) + offset;
+    const tradePnLNoOffset = trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
     // Equity: if manualBalance is set, use it as the base (fresh start balance)
-    const baseBalance = a.manualBalance || a.balance || 0;
+    const baseBalance = a.balance || 0;
     const equity = baseBalance + pnl;
     const wins=trades.filter(t=>parseFloat(t.pnl)>0).length;
     const wr=trades.length?(wins/trades.length*100).toFixed(1):0;
@@ -3787,7 +3801,7 @@ function renderAccounts() {
         ${pf.maxDD?`<div class="pf-track-row" style="margin-top:8px"><span class="pf-track-label">Max DD Limit</span><span class="pf-track-val" style="color:${totalLoss/a.balance*100>=pf.maxDD?'var(--red2)':'var(--text0)'}">$${maxDDTarget.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
         <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,totalLoss/a.balance*100/pf.maxDD*100)}%;background:${totalLoss/a.balance*100>=pf.maxDD?'var(--red)':'var(--accent)'}"></div></div>`:''}
         ${pf.profitTarget?`<div class="pf-track-row" style="margin-top:8px"><span class="pf-track-label">Profit Target</span><span class="pf-track-val" style="color:var(--green2)">$${profitTargetVal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
-        <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,pnl>0?pnl/a.balance*100/pf.profitTarget*100:0)}%;background:var(--green)"></div></div>`:''}
+        <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,pnl>0?pnl/(parseFloat(a.balance)*pf.profitTarget/100)*100:0)}%;background:var(--green)"></div></div>`:''}
       </div>`;
     }
     return `<div style="background:var(--card);border:1px solid ${isActive?a.color:'var(--border)'};border-radius:var(--radius);padding:18px;transition:all 0.2s">

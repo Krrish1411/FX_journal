@@ -1454,14 +1454,17 @@ canvas { display: block; }
         <div id="modal-chk-list" style="margin-bottom:16px"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Date</label>
+        <div class="form-group"><label class="form-label">Open Date</label>
           <input type="date" class="form-input" id="t-date"></div>
+        <div class="form-group"><label class="form-label">Close Date</label>
+          <input type="date" class="form-input" id="t-close-date"></div>
+      </div>
+      <div class="form-row">
         <div class="form-group"><label class="form-label">Open Time</label>
           <input type="time" class="form-input" id="t-open-time"></div>
-      </div>
-      <div class="form-row3">
         <div class="form-group"><label class="form-label">Close Time</label>
-          <input type="time" class="form-input" id="t-close-time" placeholder="Optional"></div>
+          <input type="time" class="form-input" id="t-close-time"></div>
+      </div>
         <div class="form-group"><label class="form-label">Symbol</label>
           <select class="form-select" id="t-symbol"></select></div>
         <div class="form-group"><label class="form-label">Direction</label>
@@ -2293,15 +2296,23 @@ function renderEquityChart(trades, range) {
   // Determine curve mode: 'profit' (cumulative P&L from 0) or 'equity' (balance + cumulative P&L)
   const curveTypeEl = document.getElementById('eq-curve-type');
   const curveMode = curveTypeEl ? curveTypeEl.value : 'profit';
-  const startBalance = parseFloat(a?.balance||0);
+  
+  // Manual balance override
+  const startBalance = (a?.manualBalance !== undefined && a?.manualBalance !== null) ? parseFloat(a.manualBalance) : parseFloat(a?.balance||0);
+  
+  // Fresh start date filter
+  if (a?.freshStartDate) {
+    const fsd = new Date(a.freshStartDate);
+    sorted = sorted.filter(t => new Date(t.date) >= fsd);
+  }
 
   let cum = 0;
   const labels = [];
   const values = [];
   const tooltipDates = [];
 
-  if (sorted.length) {
-    const firstDate = sorted[0].date;
+  if (sorted.length || curveMode === 'equity') {
+    const firstDate = sorted.length ? sorted[0].date : (a?.freshStartDate || todayStr());
     labels.push(fmtDateShort(firstDate, true));
     values.push(curveMode === 'equity' ? startBalance : 0);
     tooltipDates.push(firstDate);
@@ -2490,7 +2501,7 @@ function renderPFDashBar() {
   const totalPnL = trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
   const today = todayStr();
   const todayPnL = trades.filter(t=>t.date===today).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
-  const bal = parseFloat(a.balance)||0;
+  const bal = (a.manualBalance !== undefined && a.manualBalance !== null) ? parseFloat(a.manualBalance) : (parseFloat(a.balance)||0);
   const pf = a.pfRules;
 
   // Drawdown
@@ -2775,7 +2786,7 @@ function renderTrades() {
 
   tbody.innerHTML = trades.map(t=>{
     const a = acctMap[t.acctId];
-    const holdStr = calcHoldTime(t.date, t.openTime, t.closeTime);
+    const holdStr = calcHoldTime(t.date, t.openTime, t.closeDate || t.date, t.closeTime);
     const netPnL = (parseFloat(t.pnl)||0) - (parseFloat(t.commission)||0);
     return `<tr onclick="viewTrade('${t.id}')">
       <td class="mono" style="font-size:11px;color:var(--text3)">${t.date}<br>${t.openTime||''}</td>
@@ -2801,15 +2812,17 @@ function renderTrades() {
   }).join('');
 }
 
-function calcHoldTime(date, openT, closeT) {
+function calcHoldTime(date, openT, closeDate, closeT) {
   if (!date || !openT || !closeT) return '—';
   try {
     const o = new Date(date+'T'+openT);
-    const c = new Date(date+'T'+closeT);
+    const c = new Date((closeDate||date)+'T'+closeT);
     let diff = (c-o)/60000; // minutes
-    if (diff < 0) diff += 1440; // next day
+    if (diff < 0 && !closeDate) diff += 1440; // legacy fallback for same-day wrap
+    if (diff < 0) return '—'; 
     if (diff < 60) return diff.toFixed(0)+'m';
-    return (diff/60).toFixed(1)+'h';
+    if (diff < 1440) return (diff/60).toFixed(1)+'h';
+    return (diff/1440).toFixed(1)+'d';
   } catch { return '—'; }
 }
 
@@ -2824,7 +2837,7 @@ function populateFilters() {
   const fSess = document.getElementById('f-sess');
   if (fSess) {
     const cur = fSess.value;
-    fSess.innerHTML = '<option value="">All Sessions</option>' + DB.sessions.map(s=>`<option>${s.name}</option>`).join('');
+    fSess.innerHTML = '<option value="">All Sessions</option><option value="No Session">No Session</option>' + DB.sessions.map(s=>`<option>${s.name}</option>`).join('');
     fSess.value = cur;
   }
 }
@@ -2908,8 +2921,9 @@ function O_trade(id=null) {
   // Reset
   const now = new Date();
   document.getElementById('t-date').value = now.toISOString().slice(0,10);
+  document.getElementById('t-close-date').value = now.toISOString().slice(0,10);
   document.getElementById('t-open-time').value = now.toTimeString().slice(0,5);
-  document.getElementById('t-close-time').value = '';
+  document.getElementById('t-close-time').value = now.toTimeString().slice(0,5);
   ['t-entry','t-sl','t-tp','t-lots','t-pnl','t-comm','t-notes'].forEach(id=>{ const e=document.getElementById(id); if(e)e.value=''; });
   
   // Explicitly reset dropdowns to default (first) option so they don't show old data
@@ -2961,6 +2975,7 @@ function O_trade(id=null) {
     const t = DB.trades.find(x=>x.id===id);
     if (t) {
       document.getElementById('t-date').value = t.date;
+      document.getElementById('t-close-date').value = t.closeDate || t.date;
       document.getElementById('t-open-time').value = t.openTime||'';
       document.getElementById('t-close-time').value = t.closeTime||'';
       document.getElementById('t-symbol').value = t.symbol;
@@ -3181,6 +3196,7 @@ function saveTrade() {
     id: st.editTradeId || uid(),
     acctId, date,
     openTime: document.getElementById('t-open-time').value,
+    closeDate: document.getElementById('t-close-date').value,
     closeTime: document.getElementById('t-close-time').value,
     symbol,
     direction: document.getElementById('t-dir').value,
@@ -3497,7 +3513,7 @@ function renderAnalytics(tab='ov') {
     ].map(([k,v,c])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:12px;color:var(--text2)">${k}</span><span class="mono" style="font-size:12px;font-weight:600;color:${c}">${v}</span></div>`).join('');
 
     // Hold time stats
-    const holds = trades.map(t=>{ const h=calcHoldTime(t.date,t.openTime,t.closeTime); return h==='—'?null:h; }).filter(Boolean);
+    const holds = trades.map(t=>{ const h=calcHoldTime(t.date,t.openTime,t.closeDate,t.closeTime); return h==='—'?null:h; }).filter(Boolean);
     document.getElementById('an-hold').innerHTML = `
       <div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text2)">Trades with time</span><span class="mono" style="font-size:12px;color:var(--text0)">${holds.length}</span></div>
       <div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--text2)">Avg Hold Time</span><span class="mono" style="font-size:12px;color:var(--accent2)">${avgHoldTime(trades)}</span></div>

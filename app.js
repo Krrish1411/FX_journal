@@ -40,10 +40,10 @@ let st={
 };
 
 if(!DB.accounts.length){
-  DB.accounts=[{id:uid(),name:'Main Account',type:'Live',balance:0,curBalance:null,freshDate:null,currency:'USD',broker:'',color:'#3b82f6',pfRules:{},depw:[]}];
-  save('accounts');
+  const _defAcct={id:uid(),name:'Main Account',type:'Live',balance:0,curBalance:null,freshDate:null,currency:'USD',broker:'',color:'#3b82f6',pfRules:{},depw:[]};
+  DB.accounts=[_defAcct];save('accounts');st.activeAcctId=_defAcct.id;S.set('activeAcct',_defAcct.id);
 }
-if(!st.activeAcctId||!DB.accounts.find(a=>a.id===st.activeAcctId))st.activeAcctId=DB.accounts[0].id;
+if(!st.activeAcctId||!DB.accounts.find(a=>a.id===st.activeAcctId)){st.activeAcctId=DB.accounts[0].id;S.set('activeAcct',st.activeAcctId);}
 if(!DB.rules.length){
   DB.rules=[{id:uid(),type:'daily_loss',val:100,acctId:''},{id:uid(),type:'max_trades',val:3,acctId:''},{id:uid(),type:'min_rr',val:2,acctId:''}];
   save('rules');
@@ -711,18 +711,6 @@ function renderPFBar(){
   ].join('');
 }
 
-function renderSessionsToday(){
-  const el=document.getElementById('sessions-today');if(!el)return;
-  el.innerHTML=DB.sessions.map(s=>{
-    const act=inSession(s);
-    return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
-      <div style="width:7px;height:7px;border-radius:50%;background:${s.color};flex-shrink:0;${act?`box-shadow:0 0 7px ${s.color};`:'opacity:.3'}"></div>
-      <div style="flex:1"><div style="font-size:12.5px;font-weight:${act?600:400};color:${act?'var(--t0)':'var(--t2)'}">${s.name}</div><div style="font-size:11px;color:var(--t2)">${gmtToUserTZ(s.start)}–${gmtToUserTZ(s.end)} ${tzLabel()}</div></div>
-      ${act?'<span class="badge bg" style="font-size:9px">LIVE</span>':''}
-    </div>`;
-  }).join('');
-}
-
 function renderTopSessions(trades){
   const el=document.getElementById('dash-top-sessions');if(!el)return;
   const sm={};trades.forEach(t=>{if(!t.session)return;if(!sm[t.session])sm[t.session]={pnl:0,w:0,n:0};sm[t.session].pnl+=parseFloat(t.pnl)||0;sm[t.session].n++;if((parseFloat(t.pnl)||0)>0)sm[t.session].w++});
@@ -831,7 +819,9 @@ function renderTrades(){
 // JOURNAL
 // ═══════════════════════════════════════════════════════════
 function renderJournal(){
-  const all=activeTrades().sort((a,b)=>b.date.localeCompare(a.date));
+  let all=activeTrades().sort((a,b)=>b.date.localeCompare(a.date));
+  if(st.jrnlDateFrom)all=all.filter(t=>t.date>=st.jrnlDateFrom);
+  if(st.jrnlDateTo)all=all.filter(t=>t.date<=st.jrnlDateTo);
   const tab=st.jrnlTabFilter||'all';
   const trades=tab==='pending'?all.filter(t=>!(t.journalNotes?.trim().length>0)):
                 tab==='done'?all.filter(t=>t.journalNotes?.trim().length>0):all;
@@ -845,6 +835,18 @@ function renderJournal(){
     </div>
     <div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--t2)">${t.date}${t.session&&t.session!=='No Session'?' · '+t.session:''}</span>${fmtP(t.pnl)}</div>
   </div>`}).join('');
+}
+
+function setJrnlDate(){
+  st.jrnlDateFrom=document.getElementById('jrnl-from')?.value||'';
+  st.jrnlDateTo=document.getElementById('jrnl-to')?.value||'';
+  renderJournal();
+}
+function clearJrnlDate(){
+  st.jrnlDateFrom='';st.jrnlDateTo='';
+  const f=document.getElementById('jrnl-from');const t=document.getElementById('jrnl-to');
+  if(f)f.value='';if(t)t.value='';
+  renderJournal();
 }
 
 function setJrnlTab(tab,el){
@@ -1408,7 +1410,7 @@ function setTheme(t){
 // EXPORT / IMPORT
 // ═══════════════════════════════════════════════════════════
 function exportJSON(backup=false){
-  const data={accounts:DB.accounts,trades:DB.trades,rules:DB.rules,sessions:DB.sessions,checklist:DB.checklist,pairs:DB.pairs,setups:DB.setups,settings:DB.settings,violations:DB.violations,_version:4,_savedAt:new Date().toISOString()};
+  const data={accounts:DB.accounts,trades:DB.trades,rules:DB.rules,sessions:DB.sessions,checklist:DB.checklist,pairs:DB.pairs,setups:DB.setups,settings:DB.settings,violations:DB.violations,_activeAcctId:st.activeAcctId,_version:4,_savedAt:new Date().toISOString()};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download=backup?`FXJournal_${todayStr()}.json`:'FXJournal.json';
@@ -1429,7 +1431,7 @@ function importData(e){
       if(d.violations)DB.violations=d.violations;
       saveAll();
       if(DB.settings.theme)document.documentElement.setAttribute('data-theme',DB.settings.theme);
-      if(DB.accounts.length){st.activeAcctId=DB.accounts[0].id;S.set('activeAcct',st.activeAcctId)}
+      const _importedAcctId=d._activeAcctId;if(_importedAcctId&&DB.accounts.find(a=>a.id===_importedAcctId)){st.activeAcctId=_importedAcctId}else if(DB.accounts.length){st.activeAcctId=DB.accounts[0].id}S.set('activeAcct',st.activeAcctId);
       renderDash();updateSidebar();populateFilters();markSaved();
       toast('Imported',`${DB.trades.length} trades loaded`,'success');
     }catch(err){toast('Import failed',err.message,'error')}
@@ -1438,8 +1440,8 @@ function importData(e){
 }
 function exportCSV(){
   const t=activeTrades();
-  const hdr='Date,Account,Pair,Direction,Setup,Session,Entry,Exit,SL,TP,Lots,Gross P&L,Net P&L,Commission,Planned R:R,Actual R:R,Grade,Emotion,Rules,Notes\n';
-  const rows=t.map(x=>[x.date,DB.accounts.find(a=>a.id===x.acctId)?.name||'',x.symbol,x.direction,`"${x.setup||''}"`,x.session,x.entry,x.exitPrice||'',x.sl,x.tp,x.lots,x.pnl,((parseFloat(x.pnl)||0)-(parseFloat(x.commission)||0)).toFixed(2),x.commission||0,x.plannedRR||'',x.rr||'',x.grade||'',x.emotion||'',x.followedRules===true?'Yes':x.followedRules===false?'No':'',`"${(x.notes||'').replace(/"/g,"''")}"`,].join(',')).join('\n');
+  const hdr='Date,Account,Pair,Direction,Setup,Session,Entry,Exit,SL,TP,Lots,Gross P&L,Net P&L,Commission,Planned R:R,Actual R:R,Grade,Emotion,Rules,Notes,Journal Notes\n';
+  const rows=t.map(x=>[x.date,DB.accounts.find(a=>a.id===x.acctId)?.name||'',x.symbol,x.direction,`"${x.setup||''}"`,x.session,x.entry,x.exitPrice||'',x.sl,x.tp,x.lots,x.pnl,((parseFloat(x.pnl)||0)-(parseFloat(x.commission)||0)).toFixed(2),x.commission||0,x.plannedRR||'',x.rr||'',x.grade||'',x.emotion||'',x.followedRules===true?'Yes':x.followedRules===false?'No':'',`"${(x.notes||'').replace(/"/g,"''")}"`,`"${(x.journalNotes||'').replace(/"/g,"''")}"`.replace(/\n/g,' | '),].join(',')).join('\n');
   const blob=new Blob([hdr+rows],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='trades_'+todayStr()+'.csv';a.click();
   toast('Exported',t.length+' trades','success');
@@ -1508,13 +1510,31 @@ function tzLabel(){
 }
 
 function init(){
-  const theme=DB.settings.theme||'amoled';
-  document.documentElement.setAttribute('data-theme',theme);
-  updateSidebar();populateFilters();renderDash();checkRules();
-  // Setup selects
-  const symSel=document.getElementById('t-symbol');if(symSel)symSel.innerHTML=DB.pairs.map(p=>`<option>${p}</option>`).join('');
-  const sessSel=document.getElementById('t-session');if(sessSel)sessSel.innerHTML='<option value="">No Session</option>'+DB.sessions.map(s=>`<option>${s.name}</option>`).join('');
-  const setupSel=document.getElementById('t-setup');if(setupSel)setupSel.innerHTML=DB.setups.map(s=>`<option>${s}</option>`).join('');
+  try{
+    const theme=DB.settings.theme||'amoled';
+    document.documentElement.setAttribute('data-theme',theme);
+    // Ensure activeAcctId is valid
+    if(!st.activeAcctId||!DB.accounts.find(a=>a.id===st.activeAcctId)){
+      st.activeAcctId=DB.accounts[0]?.id;
+      if(st.activeAcctId)S.set('activeAcct',st.activeAcctId);
+    }
+    // Populate dropdowns
+    const symSel=document.getElementById('t-symbol');if(symSel)symSel.innerHTML=DB.pairs.map(p=>`<option>${p}</option>`).join('');
+    const setupSel=document.getElementById('t-setup');if(setupSel)setupSel.innerHTML=DB.setups.map(s=>`<option>${s}</option>`).join('');
+    updateSidebar();
+    populateFilters();
+    renderDash();
+    checkRules();
+  }catch(err){
+    console.error('init error:',err);
+    // Retry once after a tick in case DOM wasn't fully ready
+    setTimeout(()=>{try{updateSidebar();renderDash();}catch(e){console.error('init retry failed:',e);}},50);
+  }
 }
-init();
+// Wait for DOM then init
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',init);
+}else{
+  init();
+}
 setInterval(checkRules,60000);

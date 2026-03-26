@@ -21,14 +21,14 @@ let DB={
   checklist:S.get('checklist',['Structure confirmed on H4/Daily','Clear directional bias identified','Level (SBR/RBS/POI) identified','Entry criteria met','Trading session active','NOT entering on retracement','R:R minimum 1:2']),
   pairs:S.get('pairs',['XAUUSD','EURUSD','GBPUSD','USDJPY','GBPJPY','EURJPY','BTCUSD','ETHUSD','XAGUSD','AUDUSD','USDCAD']),
   setups:S.get('setups',DEFAULT_SETUPS),
-  settings:S.get('settings',{name:'Krish Patel',strategy:'Price Action + Market Structure',tz:'Asia/Kolkata',currency:'USD',theme:'amoled'}),
+  settings:S.get('settings',{name:'Krish Patel',strategy:'Price Action + Market Structure',tz:'Asia/Kolkata',currency:'USD',theme:'amoled',beAsWin:true}),
   violations:S.get('violations',[]),
 };
 
 let st={
   activeAcctId:S.get('activeAcct',null),
   editTradeId:null,editAcctId:null,editRuleId:null,editSessId:null,
-  tradeSS:[],tradeTags:[],tradeGrade:'',tradeEmos:[],tradeFR:null,tradeBuySell:'Buy',tradeStruct:'Bullish',
+  tradeSS:[],tradeTags:[],tradeGrade:'',tradeEmos:[],tradeFR:null,tradeBuySell:'Buy',tradeStruct:'Bullish',tradeResult:null,
   acctColor:'#3b82f6',
   calY:new Date().getFullYear(),calM:new Date().getMonth(),
   anCalY:new Date().getFullYear(),anCalM:new Date().getMonth(),
@@ -183,7 +183,7 @@ function switchAcct(id){
 function checkRules(){
   const today=todayStr();
   const todayT=DB.trades.filter(t=>t.acctId===st.activeAcctId&&t.date===today);
-  const todayPnL=todayT.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
+  const todayPnL=todayT.reduce((s,t)=>s+netPnL(t),0);
   const lossToday=Math.abs(Math.min(0,todayPnL));
   const a=acct();let viols=[];
   DB.rules.filter(r=>!r.acctId||r.acctId===st.activeAcctId).forEach(r=>{
@@ -195,7 +195,7 @@ function checkRules(){
   if(a?.type==='Prop Firm'&&a.pfRules){
     const pf=a.pfRules;const base=getAcctBase(a)||1;
     if(pf.dailyDD&&lossToday/base*100>=pf.dailyDD)viols.push(`PF daily DD ${(lossToday/base*100).toFixed(1)}% ≥ ${pf.dailyDD}%`);
-    const totalPnL2=DB.trades.filter(t=>t.acctId===st.activeAcctId).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
+    const totalPnL2=DB.trades.filter(t=>t.acctId===st.activeAcctId).reduce((s,t)=>s+netPnL(t),0);
     const totalLoss=Math.abs(Math.min(0,totalPnL2));
     if(pf.maxDD&&totalLoss/base*100>=pf.maxDD)viols.push(`PF max DD ${(totalLoss/base*100).toFixed(1)}% ≥ ${pf.maxDD}%`);
   }
@@ -306,7 +306,7 @@ function calcAll(){
 // ═══════════════════════════════════════════════════════════
 function openAddTrade(id=null){
   id=typeof id==='string'?id:null;
-  st.editTradeId=id;st.tradeSS=[];st.tradeTags=[];st.tradeGrade='';st.tradeEmos=[];st.tradeFR=null;st._calcPnL=null;
+  st.editTradeId=id;st.tradeSS=[];st.tradeTags=[];st.tradeGrade='';st.tradeEmos=[];st.tradeFR=null;st._calcPnL=null;st.tradeResult=null;
   document.getElementById('trade-modal-title').textContent=id?'Edit Trade':'Add Trade';
   const now=new Date();
   document.getElementById('t-date').value=now.toISOString().slice(0,10);
@@ -378,7 +378,16 @@ function openAddTrade(id=null){
       document.getElementById('t-comm').value=t.commission||'';
       document.getElementById('t-notes').value=t.notes||'';
       if(t.tvLink)document.getElementById('t-tv-link').value=t.tvLink;
-      st.tradeGrade=t.grade||'';st.tradeFR=t.followedRules;
+      st.tradeGrade=t.grade||'';st.tradeResult=t.tradeResult||null;st.tradeFR=t.followedRules;
+      // Restore result chips
+      if(st.tradeResult){
+        ['tr-win','tr-be','tr-rf','tr-loss'].forEach(id=>{
+          const el=document.getElementById(id);if(!el)return;
+          el.classList.remove('sel-g','sel-r','sel');
+          const cls=id==='tr-win'?'sel-g':id==='tr-loss'?'sel-r':'sel';
+          if(el.dataset.r===st.tradeResult)el.classList.add(cls);
+        });
+      }
       st.tradeSS=t.screenshots||[];st.tradeTags=t.tags||[];
       st.tradeEmos=t.emotion?t.emotion.split(', ').filter(Boolean):[];
       document.querySelectorAll('.grade-c').forEach(c=>{if(c.dataset.g===t.grade)c.classList.add('sel')});
@@ -480,7 +489,7 @@ function saveTrade(){
     tvLink:document.getElementById('t-tv-link').value,
     grade:st.tradeGrade,
     emotion:st.tradeEmos.join(', '),
-    followedRules:st.tradeFR,
+    followedRules:st.tradeFR,tradeResult:st.tradeResult,
     plannedRR:planRR&&planRR!=='—'?planRR:'',
     rr:actRR&&actRR!=='—'?actRR:(planRR&&planRR!=='—'?planRR:''),
     screenshots:[...st.tradeSS],
@@ -582,10 +591,10 @@ function getDepWOffset(a){if(!a||!Array.isArray(a.depw))return 0;return a.depw.r
 function renderDash(){
   updateSidebar();
   const trades=activeTrades();const a=acct();
-  const pnl=trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
-  const wins=trades.filter(t=>parseFloat(t.pnl)>0);const losses=trades.filter(t=>parseFloat(t.pnl)<0);
-  const gp=wins.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
-  const gl=Math.abs(losses.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0));
+  const pnl=trades.reduce((s,t)=>s+netPnL(t),0);
+  const wins=trades.filter(t=>isWin(t));const losses=trades.filter(t=>isLoss(t));
+  const gp=wins.reduce((s,t)=>s+netPnL(t),0);
+  const gl=Math.abs(losses.reduce((s,t)=>s+netPnL(t),0));
   const wr=trades.length?(wins.length/trades.length*100).toFixed(1):0;
   const pf=gl>0?(gp/gl).toFixed(2):gp>0?'∞':'—';
   const rrTrades=trades.filter(t=>t.rr&&t.rr!=='—'&&t.rr!=='');
@@ -644,7 +653,7 @@ function renderEquityChart(trades){
     });
     // Add trade events
     sorted.forEach(t=>{
-      events.push({date:t.date+'T'+(t.openTime||'12:00'),label:t.date.slice(5),delta:parseFloat(t.pnl)||0,type:'trade'});
+      events.push({date:t.date+'T'+(t.openTime||'12:00'),label:t.date.slice(5),delta:netPnL(t),type:'trade'});
     });
     // Sort all events by date
     events.sort((a,b)=>new Date(a.date)-new Date(b.date));
@@ -696,8 +705,8 @@ function filterEq(r){
 function renderPFBar(){
   const bar=document.getElementById('pf-dash-bar');if(!bar)return;
   const a=acct();if(!a||a.type!=='Prop Firm'){bar.style.display='none';return}
-  const trades=activeTrades();const pnl=trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
-  const today=todayStr();const todayPnL=trades.filter(t=>t.date===today).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
+  const trades=activeTrades();const pnl=trades.reduce((s,t)=>s+netPnL(t),0);
+  const today=todayStr();const todayPnL=trades.filter(t=>t.date===today).reduce((s,t)=>s+netPnL(t),0);
   const base=getAcctBase(a);const pf=a.pfRules||{};
   const lossToday=Math.abs(Math.min(0,todayPnL));const totalLoss=Math.abs(Math.min(0,pnl));
   const pb=(pct,color)=>`<div style="height:5px;background:var(--bg3);border-radius:99px;overflow:hidden;margin-top:4px"><div style="width:${Math.min(100,pct)}%;height:100%;border-radius:99px;background:${color};transition:width .5s"></div></div>`;
@@ -735,7 +744,7 @@ function renderCalendar(){
   const today=new Date();const pm={},cm={};
   DB.trades.filter(t=>t.acctId===st.activeAcctId).forEach(t=>{
     if(!t.date)return;const p=t.date.split('-').map(Number);
-    if(p[0]===y&&p[1]-1===m){pm[p[2]]=(pm[p[2]]||0)+(parseFloat(t.pnl)||0);cm[p[2]]=(cm[p[2]]||0)+1}
+    if(p[0]===y&&p[1]-1===m){pm[p[2]]=(pm[p[2]]||0)+netPnL(t);cm[p[2]]=(cm[p[2]]||0)+1}
   });
   let html=Array(off).fill('<div></div>').join('');
   for(let d=1;d<=dim;d++){
@@ -757,10 +766,10 @@ function renderDashTrades(trades){
     <td>${dirBadge(t.direction)}</td>
     <td class="mono" style="font-size:11px">${t.entry||'—'}</td>
     <td class="mono" style="font-size:11px;color:var(--gold2)">${t.exitPrice||'—'}</td>
-    <td>${fmtP(t.pnl)}</td>
+    <td>${fmtP(netPnL(t))}</td>
     <td style="font-size:11px;color:var(--gold2)">${t.rr||'—'}</td>
     <td>${gradeHtml(t.grade)}</td>
-    <td><span class="badge ${(parseFloat(t.pnl)||0)>0?'bg':(parseFloat(t.pnl)||0)<0?'br':'bx'}">${(parseFloat(t.pnl)||0)>0?'WIN':(parseFloat(t.pnl)||0)<0?'LOSS':'BE'}</span></td>
+    <td><span class="badge ${(parseFloat(t.pnl)||0)>0?'bg':(parseFloat(t.pnl)||0)<0?'br':'bx'}">${isWin(t)?'WIN':isLoss(t)?'LOSS':'BE'}</span></td>
   </tr>`).join('');
 }
 
@@ -804,7 +813,7 @@ function renderTrades(){
       <td class="mono" style="font-size:11px;color:var(--gold2);font-weight:600">${t.exitPrice||'—'}</td>
       <td class="mono" style="font-size:11px;color:var(--red2)">${t.sl||'—'}</td>
       <td class="mono" style="font-size:12.5px;color:var(--t1)">${t.lots||'—'}</td>
-      <td>${fmtP(t.pnl)}</td>
+      <td>${fmtP(netPnL(t))}</td>
       <td><span class="mono" style="color:${net>=0?'var(--green2)':'var(--red2)'};font-weight:700">${net>=0?'+$':'-$'}${Math.abs(net).toFixed(2)}</span></td>
       <td style="font-size:11px;color:var(--gold2)">${t.plannedRR||'—'}</td>
       <td style="font-size:11px;color:var(--accent2);font-weight:600">${t.rr||'—'}</td>
@@ -833,7 +842,7 @@ function renderJournal(){
       <span style="font-size:10px;color:var(--gold2)">${t.setup?.split(' ')[0]||''}</span>
       <span style="margin-left:auto;font-size:9.5px;color:${hasJ?'var(--green2)':'var(--t3)'}">${hasJ?'✓ done':'pending'}</span>
     </div>
-    <div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--t2)">${t.date}${t.session&&t.session!=='No Session'?' · '+t.session:''}</span>${fmtP(t.pnl)}</div>
+    <div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:var(--t2)">${t.date}${t.session&&t.session!=='No Session'?' · '+t.session:''}</span>${fmtP(netPnL(t))}</div>
   </div>`}).join('');
 }
 
@@ -967,10 +976,10 @@ function avgHoldWL(trades,win){const m=trades.filter(t=>(parseFloat(t.pnl)||0)>0
 
 function renderAnalytics(tab='ov'){
   const trades=getFilteredAnalyticsTrades();
-  const wins=trades.filter(t=>parseFloat(t.pnl)>0);const losses=trades.filter(t=>parseFloat(t.pnl)<0);
-  const pnl=trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
-  const gp=wins.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
-  const gl=Math.abs(losses.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0));
+  const wins=trades.filter(t=>isWin(t));const losses=trades.filter(t=>isLoss(t));
+  const pnl=trades.reduce((s,t)=>s+netPnL(t),0);
+  const gp=wins.reduce((s,t)=>s+netPnL(t),0);
+  const gl=Math.abs(losses.reduce((s,t)=>s+netPnL(t),0));
   const pf=gl>0?(gp/gl).toFixed(2):gp>0?'∞':'—';
   const wr=trades.length?(wins.length/trades.length*100).toFixed(1):0;
   const exp=trades.length?(pnl/trades.length).toFixed(2):'0';
@@ -985,7 +994,7 @@ function renderAnalytics(tab='ov'){
   const _depArr=(_a?.depw||[]);
   const _totDep=_depArr.filter(d=>d.type==='deposit').reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
   const _totWit=_depArr.filter(d=>d.type==='withdrawal').reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-  const _dayMap={};trades.forEach(t=>{_dayMap[t.date]=(_dayMap[t.date]||0)+(parseFloat(t.pnl)||0)});
+  const _dayMap={};trades.forEach(t=>{_dayMap[t.date]=(_dayMap[t.date]||0)+netPnL(t)});
   const _dayVals=Object.values(_dayMap).filter(v=>v>0);
   const _maxDay=_dayVals.length?Math.max(..._dayVals):0;
   const _cons=pnl>0&&_maxDay>0?(_maxDay/pnl*100).toFixed(1)+'%':'—';
@@ -1024,8 +1033,8 @@ function renderAnalytics(tab='ov'){
     ];
     const rightRows=[
       ['Total Trading Days',[...new Set(trades.map(t=>t.date))].length],
-      ['Winning Days',[...new Set(trades.map(t=>t.date))].filter(d=>trades.filter(x=>x.date===d).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0)>0).length],
-      ['Losing Days',[...new Set(trades.map(t=>t.date))].filter(d=>trades.filter(x=>x.date===d).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0)<0).length],
+      ['Winning Days',[...new Set(trades.map(t=>t.date))].filter(d=>trades.filter(x=>x.date===d).reduce((s,t)=>s+netPnL(t),0)>0).length],
+      ['Losing Days',[...new Set(trades.map(t=>t.date))].filter(d=>trades.filter(x=>x.date===d).reduce((s,t)=>s+netPnL(t),0)<0).length],
       ['Avg Daily P&L','$'+(trades.length?([...new Set(trades.map(t=>t.date))].reduce((s,d)=>s+trades.filter(x=>x.date===d).reduce((ss,t)=>ss+(parseFloat(t.pnl)||0),0),0)/[...new Set(trades.map(t=>t.date))].length||1).toFixed(2):'0')],
       ['Avg Hold Time (All)',avgHoldTime(trades)],
       ['Avg Hold Time (Wins)',avgHoldWL(trades,true)],
@@ -1042,15 +1051,15 @@ function renderAnalytics(tab='ov'){
     document.getElementById('an-stats-right').innerHTML=rowHtml(rightRows);
     // Day of week — HORIZONTAL bar
     const dow=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-    const dd=dow.map((_,i)=>trades.filter(t=>{const d=new Date(t.date).getDay();return(d===0?6:d-1)===i}).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0));
+    const dd=dow.map((_,i)=>trades.filter(t=>{const d=new Date(t.date).getDay();return(d===0?6:d-1)===i}).reduce((s,t)=>s+netPnL(t),0));
     makeChart('dowChart',{type:'bar',data:{labels:dow,datasets:[{data:dd,backgroundColor:dd.map(v=>v>=0?'rgba(34,197,94,.65)':'rgba(239,68,68,.6)'),borderRadius:5,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:c.text,font:{size:10,family:'Geist Mono'}},grid:{color:c.grid},border:{display:false}},y:{ticks:{color:c.t1,font:{size:11}},grid:{display:false},border:{display:false}}}}});
     // Grade donut
     const gs={'A+':0,'A':0,'B':0,'C':0};trades.forEach(t=>{if(gs[t.grade]!==undefined)gs[t.grade]++});
     makeChart('gradeChart',{type:'doughnut',data:{labels:Object.keys(gs),datasets:[{data:Object.values(gs),backgroundColor:['rgba(34,197,94,.8)','rgba(59,130,246,.8)','rgba(245,158,11,.8)','rgba(239,68,68,.8)'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:c.t1,font:{size:11}}}},cutout:'60%'}});
     // Buy vs Sell
     const buys=trades.filter(t=>t.direction==='Buy'||t.direction==='Long');const sells=trades.filter(t=>t.direction==='Sell'||t.direction==='Short');
-    const bWins=buys.filter(t=>parseFloat(t.pnl)>0).length,sWins=sells.filter(t=>parseFloat(t.pnl)>0).length;
-    const bPnL=buys.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0),sPnL=sells.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
+    const bWins=buys.filter(t=>isWin(t)).length,sWins=sells.filter(t=>isWin(t)).length;
+    const bPnL=buys.reduce((s,t)=>s+netPnL(t),0),sPnL=sells.reduce((s,t)=>s+netPnL(t),0);
     document.getElementById('buysell-stats').innerHTML=`
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div style="background:var(--green-d);border:1px solid rgba(34,197,94,.2);border-radius:var(--rs);padding:12px;text-align:center">
@@ -1070,33 +1079,33 @@ function renderAnalytics(tab='ov'){
     document.getElementById('an-hold').innerHTML=`<table class="stats-table"><tr><td>Avg Hold (All)</td><td>${avgHoldTime(trades)}</td></tr><tr><td>Avg Hold (Winners)</td><td>${avgHoldWL(trades,true)}</td></tr><tr><td>Avg Hold (Losers)</td><td>${avgHoldWL(trades,false)}</td></tr><tr><td>Trades with timing</td><td>${trades.filter(t=>t.openTime&&t.closeTime).length}</td></tr></table>`;
   }
   if(tab==='pairs'){
-    const pm={};trades.forEach(t=>{if(!t.symbol)return;if(!pm[t.symbol])pm[t.symbol]={w:0,n:0,p:0,l:0,lots:0,wp:0,lp:0,best:-Infinity,worst:Infinity};const pv=parseFloat(t.pnl)||0;pm[t.symbol].n++;pm[t.symbol].p+=pv;pm[t.symbol].lots+=parseFloat(t.lots)||0;if(pv>0){pm[t.symbol].w++;pm[t.symbol].wp+=pv;pm[t.symbol].best=Math.max(pm[t.symbol].best,pv)}if(pv<0){pm[t.symbol].l++;pm[t.symbol].lp+=Math.abs(pv);pm[t.symbol].worst=Math.min(pm[t.symbol].worst,pv)}});
+    const pm={};trades.forEach(t=>{if(!t.symbol)return;if(!pm[t.symbol])pm[t.symbol]={w:0,n:0,p:0,l:0,lots:0,wp:0,lp:0,best:-Infinity,worst:Infinity};const pv=netPnL(t);pm[t.symbol].n++;pm[t.symbol].p+=pv;pm[t.symbol].lots+=parseFloat(t.lots)||0;if(isWin(t)){pm[t.symbol].w++;pm[t.symbol].wp+=pv;pm[t.symbol].best=Math.max(pm[t.symbol].best,pv)}if(isLoss(t)){pm[t.symbol].l++;pm[t.symbol].lp+=Math.abs(pv);pm[t.symbol].worst=Math.min(pm[t.symbol].worst,pv)}});
     const e=Object.entries(pm).sort((a,b)=>b[1].p-a[1].p);
     makeChart('pairsChart',{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1].p),backgroundColor:e.map(x=>x[1].p>=0?'rgba(34,197,94,.65)':'rgba(239,68,68,.6)'),borderRadius:5,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:c.text,font:{size:10,family:'Geist Mono'}},grid:{color:c.grid},border:{display:false}},y:{ticks:{color:c.t1,font:{size:11}},grid:{display:false},border:{display:false}}}}});
     document.getElementById('pairs-tbl').innerHTML=e.map(([sym,d])=>`<tr><td><strong>${sym}</strong></td><td>${d.n}</td><td class="mono" style="color:var(--accent2)">${d.n?(d.w/d.n*100).toFixed(0):0}%</td><td>${fmtP(d.p)}</td><td class="mono">${d.lots.toFixed(2)}</td><td class="mono" style="color:var(--green2)">${d.w?'$'+(d.wp/d.w).toFixed(2):'—'}</td><td class="mono" style="color:var(--red2)">${d.l?'-$'+(d.lp/d.l).toFixed(2):'—'}</td><td class="mono" style="color:var(--green2)">${d.best!==Infinity?'+$'+d.best.toFixed(2):'—'}</td><td class="mono" style="color:var(--red2)">${d.worst!==Infinity?'-$'+Math.abs(d.worst).toFixed(2):'—'}</td></tr>`).join('');
   }
   if(tab==='sessions'){
     const sm={};DB.sessions.forEach(s=>sm[s.name]={w:0,n:0,p:0,lots:0});
-    trades.forEach(t=>{if(!t.session)return;if(!sm[t.session])sm[t.session]={w:0,n:0,p:0,lots:0};sm[t.session].n++;sm[t.session].p+=parseFloat(t.pnl)||0;sm[t.session].lots+=parseFloat(t.lots)||0;if((parseFloat(t.pnl)||0)>0)sm[t.session].w++});
+    trades.forEach(t=>{if(!t.session)return;if(!sm[t.session])sm[t.session]={w:0,n:0,p:0,lots:0};sm[t.session].n++;sm[t.session].p+=netPnL(t);sm[t.session].lots+=parseFloat(t.lots)||0;if(isWin(t))sm[t.session].w++});
     const e=Object.entries(sm).filter(([,d])=>d.n>0);
     makeChart('sessChart',{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1].p),backgroundColor:e.map(x=>x[1].p>=0?'rgba(34,197,94,.65)':'rgba(239,68,68,.6)'),borderRadius:5,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:c.text,font:{size:10,family:'Geist Mono'}},grid:{color:c.grid},border:{display:false}},y:{ticks:{color:c.t1,font:{size:12}},grid:{display:false},border:{display:false}}}}});
     document.getElementById('sess-details').innerHTML=e.map(([sess,d])=>`<div style="padding:9px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:600;color:var(--t0)">${sess}</div><div style="font-size:12px;color:var(--t2)">${d.n} trades · WR: ${d.n?(d.w/d.n*100).toFixed(0):0}%</div></div><div style="text-align:right">${fmtP(d.p)}</div></div>`).join('');
   }
   if(tab==='setups'){
-    const sm={};trades.forEach(t=>{if(!t.setup)return;if(!sm[t.setup])sm[t.setup]={w:0,n:0,p:0};sm[t.setup].n++;sm[t.setup].p+=parseFloat(t.pnl)||0;if((parseFloat(t.pnl)||0)>0)sm[t.setup].w++});
+    const sm={};trades.forEach(t=>{if(!t.setup)return;if(!sm[t.setup])sm[t.setup]={w:0,n:0,p:0};sm[t.setup].n++;sm[t.setup].p+=netPnL(t);if(isWin(t))sm[t.setup].w++});
     const e=Object.entries(sm).sort((a,b)=>b[1].p-a[1].p);
     makeChart('setupsChart',{type:'bar',data:{labels:e.map(x=>x[0].split(' ')[0]),datasets:[{data:e.map(x=>x[1].p),backgroundColor:e.map(x=>x[1].p>=0?'rgba(245,158,11,.7)':'rgba(239,68,68,.6)'),borderRadius:5,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:c.text,font:{size:10,family:'Geist Mono'}},grid:{color:c.grid},border:{display:false}},y:{ticks:{color:c.t1,font:{size:10}},grid:{display:false},border:{display:false}}}}});
   }
   if(tab==='time'){
-    const hd=Array.from({length:24},(_,h)=>trades.filter(t=>parseInt((t.openTime||'0:0').split(':')[0])===h).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0));
+    const hd=Array.from({length:24},(_,h)=>trades.filter(t=>parseInt((t.openTime||'0:0').split(':')[0])===h).reduce((s,t)=>s+netPnL(t),0));
     makeChart('hourChart',{type:'bar',data:{labels:Array.from({length:24},(_,h)=>h.toString().padStart(2,'0')+':00'),datasets:[{data:hd,backgroundColor:hd.map(v=>v>=0?'rgba(34,197,94,.6)':'rgba(239,68,68,.55)'),borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:c.text,font:{size:9},maxRotation:45},grid:{display:false},border:{display:false}},y:{ticks:{color:c.text,font:{size:10,family:'Geist Mono'}},grid:{color:c.grid},border:{display:false}}}}});
     // Monthly P&L
-    const mMap={};trades.forEach(t=>{const ym=t.date.slice(0,7);mMap[ym]=(mMap[ym]||0)+(parseFloat(t.pnl)||0)});
+    const mMap={};trades.forEach(t=>{const ym=t.date.slice(0,7);mMap[ym]=(mMap[ym]||0)+netPnL(t)});
     const me=Object.entries(mMap).sort((a,b)=>a[0].localeCompare(b[0]));
     makeChart('monthChart',{type:'bar',data:{labels:me.map(x=>x[0]),datasets:[{data:me.map(x=>x[1]),backgroundColor:me.map(x=>x[1]>=0?'rgba(34,197,94,.65)':'rgba(239,68,68,.6)'),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:c.text,font:{size:10}},grid:{display:false},border:{display:false}},y:{ticks:{color:c.text,font:{size:10,family:'Geist Mono'}},grid:{color:c.grid},border:{display:false}}}}});
   }
   if(tab==='emotions'){
-    const em={};trades.forEach(t=>{if(!t.emotion)return;const emotions=t.emotion.split(', ').filter(Boolean);emotions.forEach(emo=>{if(!em[emo])em[emo]={c:0,p:0};em[emo].c++;em[emo].p+=parseFloat(t.pnl)||0})});
+    const em={};trades.forEach(t=>{if(!t.emotion)return;const emotions=t.emotion.split(', ').filter(Boolean);emotions.forEach(emo=>{if(!em[emo])em[emo]={c:0,p:0};em[emo].c++;em[emo].p+=netPnL(t)})});
     const e=Object.entries(em).sort((a,b)=>b[1].c-a[1].c);
     const emoColors=['rgba(245,158,11,.8)','rgba(34,197,94,.7)','rgba(239,68,68,.7)','rgba(59,130,246,.7)','rgba(167,139,250,.7)','rgba(251,146,60,.7)','rgba(20,184,166,.7)','rgba(244,63,94,.7)'];
     makeChart('emoChart',{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1].c),backgroundColor:emoColors,borderRadius:5,borderSkipped:false}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:c.text,font:{size:10}},grid:{color:c.grid},border:{display:false}},y:{ticks:{color:c.t1,font:{size:10}},grid:{display:false},border:{display:false}}}}});
@@ -1123,7 +1132,7 @@ function renderAnEquity(mode,trades){
   // Start point at first trade date (matches dashboard)
   if(sorted.length){labels.push(sorted[0].date.slice(5));vals.push(0);tooltipD.push(sorted[0].date)}
   sorted.forEach(t=>{
-    cum+=parseFloat(t.pnl)||0;
+    cum+=netPnL(t);
     labels.push(t.date.slice(5));
     vals.push(parseFloat(cum.toFixed(2)));
     tooltipD.push(t.date);
@@ -1140,7 +1149,7 @@ function renderAnEquity(mode,trades){
 function calcMaxDD(trades){
   const sorted=[...trades].sort((a,b)=>a.date.localeCompare(b.date));
   let peak=0,maxDD=0,cum=0;
-  sorted.forEach(t=>{cum+=parseFloat(t.pnl)||0;if(cum>peak)peak=cum;const dd=peak-cum;if(dd>maxDD)maxDD=dd});
+  sorted.forEach(t=>{cum+=netPnL(t);if(cum>peak)peak=cum;const dd=peak-cum;if(dd>maxDD)maxDD=dd});
   return maxDD>0?'-$'+maxDD.toFixed(2):'—';
 }
 
@@ -1157,7 +1166,7 @@ function renderAnCalendar(trades){
   const fd=new Date(y,m,1).getDay(),dim=new Date(y,m+1,0).getDate(),off=(fd+6)%7;
   const today=new Date();
   const pm={},cm={};
-  trades.forEach(t=>{if(!t.date)return;const p=t.date.split('-').map(Number);if(p[0]===y&&p[1]-1===m){pm[p[2]]=(pm[p[2]]||0)+(parseFloat(t.pnl)||0);cm[p[2]]=(cm[p[2]]||0)+1}});
+  trades.forEach(t=>{if(!t.date)return;const p=t.date.split('-').map(Number);if(p[0]===y&&p[1]-1===m){pm[p[2]]=(pm[p[2]]||0)+netPnL(t);cm[p[2]]=(cm[p[2]]||0)+1}});
   
   let html=Array(off).fill('<div></div>').join('');
   let dayCount=off;
@@ -1193,8 +1202,8 @@ function showDayDetail(y,m,d){
   const detail=document.getElementById('an-day-detail');
   // title: `${d} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]}`;
   if(!trades.length){detail.innerHTML='<div class="empty" style="padding:20px"><div class="empty-tl">No trades</div></div>';return}
-  const dayPnL=trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
-  detail.innerHTML=`<div style="padding:10px 13px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--t2)">${trades.length} trades</span>${fmtP(dayPnL)}</div>`+trades.map(t=>`<div style="padding:9px 13px;border-bottom:1px solid var(--border);cursor:pointer" onclick="C('modal-view-trade');viewTrade('${t.id}')"><div style="display:flex;align-items:center;gap:7px"><strong style="font-size:12.5px;color:var(--t0)">${t.symbol}</strong>${dirBadge(t.direction)}<span style="font-size:10px;color:var(--gold2)">${t.setup?.split(' ')[0]||''}</span><span style="margin-left:auto">${fmtP(t.pnl)}</span></div><div style="font-size:11.5px;color:var(--t2);margin-top:2px">${t.session||'—'} · ${t.openTime||'—'}</div></div>`).join('');
+  const dayPnL=trades.reduce((s,t)=>s+netPnL(t),0);
+  detail.innerHTML=`<div style="padding:10px 13px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:var(--t2)">${trades.length} trades</span>${fmtP(dayPnL)}</div>`+trades.map(t=>`<div style="padding:9px 13px;border-bottom:1px solid var(--border);cursor:pointer" onclick="C('modal-view-trade');viewTrade('${t.id}')"><div style="display:flex;align-items:center;gap:7px"><strong style="font-size:12.5px;color:var(--t0)">${t.symbol}</strong>${dirBadge(t.direction)}<span style="font-size:10px;color:var(--gold2)">${t.setup?.split(' ')[0]||''}</span><span style="margin-left:auto">${fmtP(netPnL(t))}</span></div><div style="font-size:11.5px;color:var(--t2);margin-top:2px">${t.session||'—'} · ${t.openTime||'—'}</div></div>`).join('');
 }
 function renderWeeklySummary(trades){
   const el=document.getElementById('an-weekly-summary');if(!el)return;
@@ -1209,7 +1218,7 @@ function renderWeeklySummary(trades){
   if(w.length)weeks.push(w);
   el.innerHTML=weeks.map((wk,i)=>{
     const wTrades=trades.filter(t=>{const p=t.date.split('-').map(Number);return p[0]===y&&p[1]-1===m&&wk.includes(p[2])});
-    const wPnL=wTrades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
+    const wPnL=wTrades.reduce((s,t)=>s+netPnL(t),0);
     const wWins=wTrades.filter(t=>parseFloat(t.pnl)>0).length;
     return`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
       <div>
@@ -1283,7 +1292,7 @@ function renderAccounts(){
   grid.innerHTML=DB.accounts.map(a=>{
     let trades=DB.trades.filter(t=>t.acctId===a.id);
     if(a.freshDate)trades=trades.filter(t=>t.date>=a.freshDate);
-    const pnl=trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
+    const pnl=trades.reduce((s,t)=>s+netPnL(t),0);
     const wins=trades.filter(t=>parseFloat(t.pnl)>0).length;
     const wr=trades.length?(wins/trades.length*100).toFixed(1):0;
     const lots=trades.reduce((s,t)=>s+(parseFloat(t.lots)||0),0).toFixed(2);
@@ -1293,7 +1302,7 @@ function renderAccounts(){
     const isActive=a.id===st.activeAcctId;
     let pfHtml='';
     if(a.type==='Prop Firm'&&a.pfRules){
-      const pf=a.pfRules;const todayPnL=DB.trades.filter(t=>t.acctId===a.id&&t.date===todayStr()).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
+      const pf=a.pfRules;const todayPnL=DB.trades.filter(t=>t.acctId===a.id&&t.date===todayStr()).reduce((s,t)=>s+netPnL(t),0);
       const lossT=Math.abs(Math.min(0,todayPnL));const totalLoss=Math.abs(Math.min(0,pnl));
       pfHtml=`<div class="pf-tr">${pf.dailyDD?`<div class="pf-row"><span class="pf-lbl">Daily DD</span><span class="pf-val" style="color:${lossT/base*100>=pf.dailyDD?'var(--red2)':'var(--t0)'}">$${lossT.toFixed(2)} / ${pf.dailyDD}%</span></div><div class="prog"><div class="prog-f" style="width:${Math.min(100,pf.dailyDD?lossT/base*100/pf.dailyDD*100:0)}%;background:${lossT/base*100>=pf.dailyDD?'var(--red)':'var(--green)'}"></div></div>`:''}${pf.maxDD?`<div class="pf-row" style="margin-top:7px"><span class="pf-lbl">Max DD</span><span class="pf-val">$${totalLoss.toFixed(2)} / ${pf.maxDD}%</span></div><div class="prog"><div class="prog-f" style="width:${Math.min(100,pf.maxDD?totalLoss/base*100/pf.maxDD*100:0)}%;background:${totalLoss/base*100>=pf.maxDD?'var(--red)':'var(--accent)'}"></div></div>`:''}${pf.profitTarget?`<div class="pf-row" style="margin-top:7px"><span class="pf-lbl">Target</span><span class="pf-val" style="color:var(--green2)">$${Math.max(0,pnl).toFixed(2)} / ${pf.profitTarget}%</span></div><div class="prog"><div class="prog-f" style="width:${Math.min(100,pf.profitTarget&&base?Math.max(0,pnl/base*100/pf.profitTarget*100):0)}%;background:var(--green)"></div></div>`:''}</div>`;
     }
@@ -1329,7 +1338,7 @@ function renderAccounts(){
 function renderRules(){
   const today=todayStr();
   const todayT=DB.trades.filter(t=>t.acctId===st.activeAcctId&&t.date===today);
-  const todayPnL=todayT.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
+  const todayPnL=todayT.reduce((s,t)=>s+netPnL(t),0);
   const lossToday=Math.abs(Math.min(0,todayPnL));
   const rl=document.getElementById('rules-list');
   rl.innerHTML=DB.rules.map(r=>{
@@ -1393,6 +1402,16 @@ function loadSettings(){
   document.getElementById('set-tz').value=DB.settings.tz||'Asia/Kolkata';
   document.getElementById('set-cur').value=DB.settings.currency||'USD';
   document.querySelectorAll('[data-t]').forEach(el=>el.classList.toggle('active',el.dataset.t===DB.settings.theme));
+  const togBE=document.getElementById('tog-be-win');
+  if(togBE)togBE.classList.toggle('on',!!DB.settings.beAsWin);
+}
+function toggleBEasWin(){
+  DB.settings.beAsWin=!DB.settings.beAsWin;
+  S.set('settings',DB.settings);
+  const tog=document.getElementById('tog-be-win');
+  if(tog)tog.classList.toggle('on',!!DB.settings.beAsWin);
+  renderDash();
+  toast(DB.settings.beAsWin?'BE counts as Win':'BE counts as Loss','','success');
 }
 function saveSettings(){
   DB.settings.name=document.getElementById('set-name').value;DB.settings.strategy=document.getElementById('set-strat').value;
@@ -1489,6 +1508,33 @@ function autoDetectInstrument(sym){
   else if(/^[A-Z]{6}$/.test(s)||(s.length===6&&!s.includes('USD'+'USD')))inst.value='forex';
   else inst.value='forex';
   calcAll();
+}
+
+// ── Net P&L helper: always deduct commission ──
+function netPnL(t){return (parseFloat(t.pnl)||0)-(parseFloat(t.commission)||0)}
+// ── Win/Loss classification respecting BE/RF override ──
+function isWin(t){
+  if(t.tradeResult==='be'||t.tradeResult==='rf')return !!DB.settings.beAsWin;
+  if(t.tradeResult==='win')return true;
+  if(t.tradeResult==='loss')return false;
+  return netPnL(t)>0;
+}
+function isLoss(t){
+  if(t.tradeResult==='be'||t.tradeResult==='rf')return false;// BE/RF never a loss
+  if(t.tradeResult==='win')return false;
+  if(t.tradeResult==='loss')return true;
+  return netPnL(t)<0;
+}
+function isBE(t){return t.tradeResult==='be'||t.tradeResult==='rf'}
+
+function setTradeResult(r){
+  st.tradeResult=st.tradeResult===r?null:r;// toggle
+  ['tr-win','tr-be','tr-rf','tr-loss'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.classList.remove('sel-g','sel-r','sel');
+    const cls=id==='tr-win'?'sel-g':id==='tr-loss'?'sel-r':'sel';
+    if(el.dataset.r===st.tradeResult)el.classList.add(cls);
+  });
 }
 
 // ── Timezone helpers ──

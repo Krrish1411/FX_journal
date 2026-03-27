@@ -380,14 +380,8 @@ function openAddTrade(id=null){
       if(t.tvLink)document.getElementById('t-tv-link').value=t.tvLink;
       st.tradeGrade=t.grade||'';st.tradeResult=t.tradeResult||null;st.tradeFR=t.followedRules;
       // Restore result chips
-      if(st.tradeResult){
-        ['tr-win','tr-be','tr-rf','tr-loss'].forEach(id=>{
-          const el=document.getElementById(id);if(!el)return;
-          el.classList.remove('sel-g','sel-r','sel');
-          const cls=id==='tr-win'?'sel-g':id==='tr-loss'?'sel-r':'sel';
-          if(el.dataset.r===st.tradeResult)el.classList.add(cls);
-        });
-      }
+      const rfEl=document.getElementById('tr-rf');
+      if(rfEl)rfEl.classList.toggle('sel',st.tradeResult==='rf');
       st.tradeSS=t.screenshots||[];st.tradeTags=t.tags||[];
       st.tradeEmos=t.emotion?t.emotion.split(', ').filter(Boolean):[];
       document.querySelectorAll('.grade-c').forEach(c=>{if(c.dataset.g===t.grade)c.classList.add('sel')});
@@ -557,6 +551,7 @@ function viewTrade(id){
         ${vf('Grade',gradeHtml(t.grade))}
         ${vf('Emotion',t.emotion||'—')}
         ${vf('Rules',t.followedRules===true?'<span class="badge bg">✓ Yes</span>':t.followedRules===false?'<span class="badge br">✗ No</span>':'—')}
+        ${vf('Trade Result',resultBadge(t)||'<span class="badge bx">Auto-detect</span>')}}
         ${t.tags?.length?vf('Tags',t.tags.map(g=>`<span class="tag">${g}</span>`).join(' ')):''}
       </div>
     </div>
@@ -574,6 +569,13 @@ function viewTrade(id){
 // BADGE HELPERS
 // ═══════════════════════════════════════════════════════════
 function dirBadge(d){return d==='Buy'||d==='Long'?'<span class="badge bg">↑ Buy</span>':'<span class="badge br">↓ Sell</span>'}
+function resultBadge(t){
+  if(isRFBE(t))return '<span class="badge ba" style="font-size:10px">🔄 RF/BE</span>';
+  if(netPnL(t)===0&&!t.tradeResult)return '<span class="badge ba" style="font-size:10px">⚖ BE</span>';
+  if(isWin(t))return '<span class="badge bg" style="font-size:10px">✓ Win</span>';
+  if(isLoss(t))return '<span class="badge br" style="font-size:10px">✗ Loss</span>';
+  return '';
+}
 function gradeHtml(g){const c={'A+':'var(--green2)','A':'var(--accent2)','B':'var(--gold2)','C':'var(--red2)'};return g?`<span class="mono" style="color:${c[g]||'var(--t2)'};font-weight:800">${g}</span>`:'—'}
 function fmtP(v){const n=parseFloat(v)||0;return`<span class="mono" style="color:${n>=0?'var(--green2)':'var(--red2)'};font-weight:700">${n>=0?'+$':'-$'}${Math.abs(n).toFixed(2)}</span>`}
 
@@ -769,7 +771,7 @@ function renderDashTrades(trades){
     <td>${fmtP(netPnL(t))}</td>
     <td style="font-size:11px;color:var(--gold2)">${t.rr||'—'}</td>
     <td>${gradeHtml(t.grade)}</td>
-    <td><span class="badge ${(parseFloat(t.pnl)||0)>0?'bg':(parseFloat(t.pnl)||0)<0?'br':'bx'}">${isWin(t)?'WIN':isLoss(t)?'LOSS':'BE'}</span></td>
+    <td><span class="badge ${(parseFloat(t.pnl)||0)>0?'bg':(parseFloat(t.pnl)||0)<0?'br':'bx'}">${isRFBE(t)?'RF/BE':isWin(t)?'WIN':isLoss(t)?'LOSS':'BE'}</span></td>
   </tr>`).join('');
 }
 
@@ -806,7 +808,7 @@ function renderTrades(){
     return`<tr onclick="viewTrade('${t.id}')">
       <td class="mono" style="font-size:12px;color:var(--t1)">${t.date}<br><span style="color:var(--t2)">${t.openTime||''}</span></td>
       <td><strong style="color:var(--t0);font-size:14px">${t.symbol}</strong></td>
-      <td>${dirBadge(t.direction)}</td>
+      <td>${dirBadge(t.direction)} ${resultBadge(t)}</td>
       <td style="font-size:12px;color:var(--gold2);font-weight:600">${t.setup?.split(' ')[0]||'—'}</td>
       <td style="font-size:12.5px;color:var(--t1)">${t.session||'—'}</td>
       <td class="mono" style="font-size:11px">${t.entry||'—'}</td>
@@ -897,6 +899,7 @@ function openJrnlDetail(id){
     ['Grade',gradeHtml(t.grade)],
     ['Emotion',t.emotion||'—'],
     ['Rules',t.followedRules===true?'<span class="badge bg">✓ Yes</span>':t.followedRules===false?'<span class="badge br">✗ No</span>':'—'],
+    ['Result',resultBadge(t)||'<span class="badge bx">Auto-detect</span>'],
   ].map(([l,v])=>`<div class="jd-item"><div class="jd-lbl">${l}</div><div class="jd-val">${v}</div></div>`).join('');
   
   const pnlDetail=`
@@ -1004,7 +1007,11 @@ function renderAnalytics(tab='ov'){
     // Equity curve in analytics
     renderAnEquity('profit',trades);
     // WL donut
-    makeChart('wlChart',{type:'doughnut',data:{labels:['Win','Loss','BE'],datasets:[{data:[wins.length,losses.length,trades.filter(t=>parseFloat(t.pnl)===0).length],backgroundColor:['rgba(34,197,94,.75)','rgba(239,68,68,.75)','rgba(59,130,246,.5)'],borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:c.t1,font:{size:11},padding:10}}},cutout:'65%'}});
+    const rfBeTrades=trades.filter(t=>isRFBE(t));
+    const pureWins=trades.filter(t=>!isRFBE(t)&&isWin(t));
+    const pureLosses=trades.filter(t=>!isRFBE(t)&&isLoss(t));
+    const zeroBE=trades.filter(t=>!isRFBE(t)&&netPnL(t)===0);
+    makeChart('wlChart',{type:'doughnut',data:{labels:['Win','Loss','RF/BE','$0 BE'],datasets:[{data:[pureWins.length,pureLosses.length,rfBeTrades.length,zeroBE.length],backgroundColor:['rgba(34,197,94,.75)','rgba(239,68,68,.75)','rgba(59,130,246,.7)','rgba(59,130,246,.3)'],borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:c.t1,font:{size:11},padding:10,filter:i=>i.parsed>0}}},cutout:'65%'}});
     // Stats tables
     const strk=getStreaks(trades);const totalLots=trades.reduce((s,t)=>s+(parseFloat(t.lots)||0),0).toFixed(2);
     const totalComm=trades.reduce((s,t)=>s+(parseFloat(t.commission)||0),0).toFixed(2);
@@ -1029,6 +1036,9 @@ function renderAnalytics(tab='ov'){
       ['Rules Followed',frPct],
       ['Max Win Streak',strk.maxW+' trades'],
       ['Max Loss Streak',strk.maxL+' trades'],
+      ['RF/BE Trades',()=>{const rf=trades.filter(t=>isRFBE(t));const zbe=trades.filter(t=>!isRFBE(t)&&netPnL(t)===0);return `${rf.length+zbe.length} (${rf.length} RF, ${zbe.length} $0)`}],
+      ['WR incl. RF/BE',()=>{const tot=trades.length;if(!tot)return '—';const wAll=trades.filter(t=>isWin(t)||isBE(t));return (wAll.length/tot*100).toFixed(1)+'%'}],
+      ['WR excl. RF/BE',()=>{const decisive=trades.filter(t=>!isBE(t)&&netPnL(t)!==0);if(!decisive.length)return '—';return (decisive.filter(t=>isWin(t)).length/decisive.length*100).toFixed(1)+'%'}],
       ...(a?.type==='Live'||a?.type==='Demo'?[['Total Deposited','$'+Math.max(0,depw).toFixed(2)],['Total Withdrawn','$'+Math.abs(Math.min(0,depw)).toFixed(2)]]:['Account Balance','$'+(base+pnl).toFixed(2)]),
     ];
     const rightRows=[
@@ -1513,28 +1523,29 @@ function autoDetectInstrument(sym){
 // ── Net P&L helper: always deduct commission ──
 function netPnL(t){return (parseFloat(t.pnl)||0)-(parseFloat(t.commission)||0)}
 // ── Win/Loss classification respecting BE/RF override ──
+function isRFBE(t){return t.tradeResult==='rf'}
+function isBE(t){return t.tradeResult==='rf'||netPnL(t)===0}
 function isWin(t){
-  if(t.tradeResult==='be'||t.tradeResult==='rf')return !!DB.settings.beAsWin;
+  if(t.tradeResult==='rf')return !!DB.settings.beAsWin;
   if(t.tradeResult==='win')return true;
   if(t.tradeResult==='loss')return false;
-  return netPnL(t)>0;
+  const np=netPnL(t);
+  if(np===0)return !!DB.settings.beAsWin;// $0 trade counts as win if beAsWin on
+  return np>0;
 }
 function isLoss(t){
-  if(t.tradeResult==='be'||t.tradeResult==='rf')return false;// BE/RF never a loss
+  if(t.tradeResult==='rf')return false;// RF/BE never a loss
   if(t.tradeResult==='win')return false;
   if(t.tradeResult==='loss')return true;
-  return netPnL(t)<0;
+  const np=netPnL(t);
+  if(np===0)return false;// $0 = BE, not loss
+  return np<0;
 }
-function isBE(t){return t.tradeResult==='be'||t.tradeResult==='rf'}
 
 function setTradeResult(r){
   st.tradeResult=st.tradeResult===r?null:r;// toggle
-  ['tr-win','tr-be','tr-rf','tr-loss'].forEach(id=>{
-    const el=document.getElementById(id);if(!el)return;
-    el.classList.remove('sel-g','sel-r','sel');
-    const cls=id==='tr-win'?'sel-g':id==='tr-loss'?'sel-r':'sel';
-    if(el.dataset.r===st.tradeResult)el.classList.add(cls);
-  });
+  const el=document.getElementById('tr-rf');if(!el)return;
+  el.classList.toggle('sel',st.tradeResult==='rf');
 }
 
 // ── Timezone helpers ──

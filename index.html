@@ -227,6 +227,12 @@
         <div class="time-pill" onclick="setPerfFilter('3m',this)">3 Months</div>
         <div class="time-pill" onclick="setPerfFilter('1y',this)">1 Year</div>
       </div>
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+        <input type="date" class="fi" id="perf-from" style="font-size:11.5px;padding:4px 8px;width:auto" oninput="setPerfCustomRange()" title="Custom from">
+        <span style="color:var(--t2);font-size:11px">–</span>
+        <input type="date" class="fi" id="perf-to" style="font-size:11.5px;padding:4px 8px;width:auto" oninput="setPerfCustomRange()" title="Custom to">
+        <div class="time-pill" id="pill-custom" onclick="setPerfCustomRange()" style="display:none">Custom</div>
+      </div>
       <div style="display:flex;gap:4px;margin-left:auto">
         <div class="time-pill active" id="pf-all" onclick="setPerfTypeFilter('all')">All</div>
         <div class="time-pill" id="pf-wins" onclick="setPerfTypeFilter('wins')">✓ Winners</div>

@@ -10,40 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 </head>
 <body>
-<div id="pw-gate" style="position:fixed;inset:0;background:#000;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px">
-  <div style="font-size:13px;font-weight:800;color:#1e64ff;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">FX Journal</div>
-  <div style="font-size:14px;color:#b8c8e8;margin-bottom:4px">Enter password to continue</div>
-  <input type="password" id="pw-inp" placeholder="Password" autofocus
-    style="background:#0a0a10;border:1px solid #1e3060;border-radius:8px;padding:10px 16px;color:#fff;font-size:15px;width:260px;outline:none;text-align:center;letter-spacing:2px"
-    onkeydown="if(event.key==='Enter')checkPW()">
-  <button onclick="checkPW()" style="background:#1e64ff;color:#000;border:none;border-radius:8px;padding:10px 32px;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px">Unlock</button>
-  <div id="pw-err" style="color:#f87171;font-size:12px;display:none">Incorrect password</div>
-</div>
-<script>
-(function(){
-  const HASH='5e8d3b4f2a1c9e7d';// marker — real check below
-  const PW='S@251275';
-  function checkPW(){
-    const v=document.getElementById('pw-inp').value;
-    if(v===PW){
-      document.getElementById('pw-gate').style.display='none';
-      sessionStorage.setItem('fxj_auth','1');
-    }else{
-      const err=document.getElementById('pw-err');err.style.display='block';
-      const inp=document.getElementById('pw-inp');inp.value='';inp.focus();
-      inp.style.borderColor='#f87171';
-      setTimeout(()=>{err.style.display='none';inp.style.borderColor='#1e3060';},2000);
-    }
-  }
-  window.checkPW=checkPW;
-  // Auto-unlock if already authenticated this session
-  if(sessionStorage.getItem('fxj_auth')==='1'){
-    document.getElementById('pw-gate').style.display='none';
-  }
-  // Focus on load
-  setTimeout(()=>document.getElementById('pw-inp')?.focus(),100);
-})();
-</script>
+
 <div id="toasts"></div>
 <div id="alert-bar" onclick="this.style.display='none'">⛔ RULE BREACH — Stop Trading Now. Click to dismiss.</div>
 
@@ -65,6 +32,7 @@
     <div class="nav-item active" data-p="dash"><span class="nav-ic">◈</span>Dashboard</div>
     <div class="nav-item" data-p="trades"><span class="nav-ic">⇅</span>Trades</div>
     <div class="nav-item" data-p="journal"><span class="nav-ic">✎</span>Journal</div>
+    <div class="nav-item" data-p="notes"><span class="nav-ic">📒</span>Notes</div>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
@@ -212,6 +180,24 @@
 </div>
     <div class="journal-r" id="jrnl-detail">
       <div class="empty"><div class="empty-ic">✎</div><div class="empty-tl">Select a trade to journal</div><div class="empty-sub">Write analysis, insights, what worked and what didn't.</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ NOTES ═══ -->
+  <div class="page-fill" id="page-notes">
+    <div class="notes-sidebar" id="notes-folders-panel">
+      <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--t2)">Folders</div>
+        <button class="btn-ic" onclick="openFolderModal()" title="New Folder" style="padding:3px 7px;font-size:12px">＋</button>
+      </div>
+      <div id="notes-folder-list"></div>
+    </div>
+    <div class="notes-main">
+      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg1)">
+        <div style="font-size:14px;font-weight:700;color:var(--t0);flex:1" id="notes-folder-title">All Notes</div>
+        <button class="btn btn-p btn-sm" onclick="openNoteEditor()">＋ New Note</button>
+      </div>
+      <div class="notes-list" id="notes-list"></div>
     </div>
   </div>
 
@@ -482,10 +468,16 @@
       <button class="modal-x" onclick="C('modal-trade')">✕</button>
     </div>
     <div class="modal-bd">
-      <!-- PRE-TRADE CHECKLIST -->
+      <!-- PRE-TRADE CHECKLIST (collapsible) -->
       <div id="modal-chk-outer">
-        <div class="sec-t" style="margin-top:0;margin-bottom:8px">Pre-Trade Checklist</div>
-        <div id="modal-chk-list" style="margin-bottom:14px"></div>
+        <div class="chk-toggle-header" onclick="toggleChecklist()">
+          <div class="chk-toggle-arrow" id="chk-arrow">▶</div>
+          <div class="chk-toggle-title">Pre-Trade Checklist</div>
+          <div class="chk-toggle-badge" id="chk-badge">0 items</div>
+        </div>
+        <div class="chk-collapse" id="chk-collapse">
+          <div id="modal-chk-list" style="margin-bottom:14px"></div>
+        </div>
       </div>
 
       <!-- BUY / SELL - Modern large buttons -->
@@ -789,6 +781,67 @@
     <div class="modal-ft"><button class="btn btn-s" onclick="C('modal-confirm')">Cancel</button><button class="btn btn-d" id="confirm-btn">Confirm</button></div>
   </div>
 </div>
+
+<!-- NOTE EDITOR MODAL -->
+<div class="overlay" id="modal-note-editor">
+  <div class="modal modal-xl" style="max-width:98vw;width:98vw;height:95vh;display:flex;flex-direction:column;margin:auto;border-radius:12px">
+    <div class="modal-hd" style="flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:10px;flex:1">
+        <div class="modal-tl" id="note-editor-title">New Note</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="btn btn-d btn-sm" id="note-delete-btn" style="display:none" onclick="deleteNote()">✕ Delete</button>
+        <button class="btn btn-p btn-sm" onclick="saveNote()">💾 Save</button>
+        <button class="modal-x" onclick="C('modal-note-editor')">✕</button>
+      </div>
+    </div>
+    <!-- Note toolbar -->
+    <div class="note-toolbar" id="note-toolbar">
+      <input class="note-title-input" id="note-title" placeholder="Note title..." autocomplete="off">
+      <div class="note-toolbar-row">
+        <select class="fs note-toolbar-sel" id="note-folder-sel"></select>
+        <select class="fs note-toolbar-sel" id="note-trade-link"><option value="">🔗 Link Trade</option></select>
+        <div style="margin-left:auto;display:flex;gap:4px;align-items:center">
+          <button class="btn btn-s btn-sm" onclick="insertNoteImage()" title="Add Image">📸 Image</button>
+          <input type="file" id="note-img-inp" multiple accept="image/*" style="display:none" onchange="handleNoteImgInsert(event)">
+          <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
+          <button class="btn btn-s btn-sm note-draw-toggle" id="note-draw-btn" onclick="toggleDrawMode()" title="Toggle Drawing Mode">✏️ Draw</button>
+          <button class="btn btn-s btn-sm" id="note-eraser-btn" onclick="toggleEraser()" title="Eraser">🧹 Eraser</button>
+          <input type="color" id="draw-color" value="#ff4444" style="width:28px;height:24px;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--bg2)" onchange="setDrawColor(this.value)">
+          <select class="fs" id="draw-size" style="width:62px;font-size:10px;padding:2px 4px;height:24px" onchange="setDrawSize(this.value)">
+            <option value="2">Thin</option>
+            <option value="3" selected>Med</option>
+            <option value="6">Thick</option>
+            <option value="12">Bold</option>
+          </select>
+          <button class="btn btn-g btn-sm" onclick="undoDrawing()" title="Undo drawing">↩</button>
+          <button class="btn btn-g btn-sm" onclick="clearDrawing()" title="Clear all drawing">✕</button>
+        </div>
+      </div>
+    </div>
+    <!-- Linked trade details (shown dynamically) -->
+    <div id="note-trade-details" style="display:none;flex-shrink:0"></div>
+    <!-- Note body -->
+    <div class="note-editor-body" id="note-editor-body">
+      <div class="note-canvas-wrap" id="note-canvas-wrap">
+        <div class="note-content-editable" id="note-content" contenteditable="true" data-placeholder="Start writing your notes here... Paste or drop images inline. Toggle ✏️ Draw to sketch anywhere."></div>
+        <canvas class="note-draw-canvas" id="draw-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOLDER MODAL -->
+<div class="overlay" id="modal-folder">
+  <div class="modal modal-sm">
+    <div class="modal-hd"><div class="modal-tl" id="folder-modal-title">New Folder</div><button class="modal-x" onclick="C('modal-folder')">✕</button></div>
+    <div class="modal-bd">
+      <div class="fg"><label class="fl">Folder Name</label><input class="fi" id="folder-name" placeholder="e.g. Price Action, ICT Concepts..."></div>
+    </div>
+    <div class="modal-ft"><button class="btn btn-g" onclick="C('modal-folder')">Cancel</button><button class="btn btn-p" onclick="saveFolder()">Save</button></div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>

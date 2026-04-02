@@ -23,6 +23,8 @@ let DB={
   setups:S.get('setups',DEFAULT_SETUPS),
   settings:S.get('settings',{name:'Krish Patel',strategy:'Price Action + Market Structure',tz:'Asia/Kolkata',currency:'USD',theme:'amoled',beAsWin:true}),
   violations:S.get('violations',[]),
+  notes:S.get('notes',[]),
+  noteFolders:S.get('noteFolders',[{id:'f_general',name:'General'}]),
 };
 
 let st={
@@ -51,7 +53,7 @@ if(!DB.rules.length){
 
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5)}
 function save(k){S.set(k,DB[k]);markUnsaved()}
-function saveAll(){['accounts','trades','rules','sessions','checklist','pairs','setups','settings','violations'].forEach(k=>S.set(k,DB[k]))}
+function saveAll(){['accounts','trades','rules','sessions','checklist','pairs','setups','settings','violations','notes','noteFolders'].forEach(k=>S.set(k,DB[k]))}
 function acct(id){return DB.accounts.find(a=>a.id===(id||st.activeAcctId))}
 function activeTrades(id){
   const aid=id||st.activeAcctId;
@@ -105,7 +107,7 @@ function confirmAction(title,msg,cb){
 // ═══════════════════════════════════════════════════════════
 // NAV
 // ═══════════════════════════════════════════════════════════
-const TITLES={dash:'Dashboard',trades:'Trades',journal:'Journal',analytics:'Performance Analytics',accounts:'Accounts',rules:'Rules & Config',settings:'Settings'};
+const TITLES={dash:'Dashboard',trades:'Trades',journal:'Journal',notes:'Notes',analytics:'Performance Analytics',accounts:'Accounts',rules:'Rules & Config',settings:'Settings'};
 function nav(p){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelector(`[data-p="${p}"]`)?.classList.add('active');
@@ -119,6 +121,7 @@ function nav(p){
   else if(p==='accounts')renderAccounts();
   else if(p==='rules')renderRules();
   else if(p==='settings')loadSettings();
+  else if(p==='notes')renderNotes();
   else if(p==='report')loadAISettings();
 }
 document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',()=>nav(n.dataset.p)));
@@ -411,12 +414,26 @@ function selStruct(s){
     el.className='chip'+(x===s?' sel-'+(s==='Bullish'?'g':'Ranging'?'':'r')+' sel':'');
   });
 }
+function toggleChecklist(){
+  const collapse=document.getElementById('chk-collapse');
+  const arrow=document.getElementById('chk-arrow');
+  if(!collapse||!arrow)return;
+  collapse.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
 function renderModalChecklist(){
   const outer=document.getElementById('modal-chk-outer');
   const list=document.getElementById('modal-chk-list');
+  const badge=document.getElementById('chk-badge');
+  const collapse=document.getElementById('chk-collapse');
+  const arrow=document.getElementById('chk-arrow');
   if(!outer||!list)return;
   if(!DB.checklist.length){outer.style.display='none';return}
   outer.style.display='block';
+  if(badge)badge.textContent=DB.checklist.length+' item'+(DB.checklist.length!==1?'s':'');
+  // Default collapsed
+  if(collapse)collapse.classList.remove('open');
+  if(arrow)arrow.classList.remove('open');
   list.innerHTML=DB.checklist.map((item,i)=>`<div class="chk-item" id="mchk-${i}" onclick="this.classList.toggle('done')"><div class="chk-box">✓</div><span style="font-size:12.5px;color:var(--t1)">${item}</span></div>`).join('');
 }
 function selGrade(g){
@@ -1374,7 +1391,7 @@ function editAcct(id){
 }
 function renderAccounts(){
   const grid=document.getElementById('accounts-grid');
-  grid.innerHTML=DB.accounts.map(a=>{
+  grid.innerHTML=DB.accounts.map((a,idx)=>{
     let trades=DB.trades.filter(t=>t.acctId===a.id);
     if(a.freshDate)trades=trades.filter(t=>t.date>=a.freshDate);
     const pnl=trades.reduce((s,t)=>s+netPnL(t),0);
@@ -1392,19 +1409,20 @@ function renderAccounts(){
       pfHtml=`<div class="pf-tr">${pf.dailyDD?`<div class="pf-row"><span class="pf-lbl">Daily DD</span><span class="pf-val" style="color:${lossT/base*100>=pf.dailyDD?'var(--red2)':'var(--t0)'}">$${lossT.toFixed(2)} / ${pf.dailyDD}%</span></div><div class="prog"><div class="prog-f" style="width:${Math.min(100,pf.dailyDD?lossT/base*100/pf.dailyDD*100:0)}%;background:${lossT/base*100>=pf.dailyDD?'var(--red)':'var(--green)'}"></div></div>`:''}${pf.maxDD?`<div class="pf-row" style="margin-top:7px"><span class="pf-lbl">Max DD</span><span class="pf-val">$${totalLoss.toFixed(2)} / ${pf.maxDD}%</span></div><div class="prog"><div class="prog-f" style="width:${Math.min(100,pf.maxDD?totalLoss/base*100/pf.maxDD*100:0)}%;background:${totalLoss/base*100>=pf.maxDD?'var(--red)':'var(--accent)'}"></div></div>`:''}${pf.profitTarget?`<div class="pf-row" style="margin-top:7px"><span class="pf-lbl">Target</span><span class="pf-val" style="color:var(--green2)">$${Math.max(0,pnl).toFixed(2)} / ${pf.profitTarget}%</span></div><div class="prog"><div class="prog-f" style="width:${Math.min(100,pf.profitTarget&&base?Math.max(0,pnl/base*100/pf.profitTarget*100):0)}%;background:var(--green)"></div></div>`:''}</div>`;
     }
     const mbox2=(l,v,c)=>`<div style="background:var(--bg3);border-radius:var(--rxs);padding:8px;text-align:center"><div style="font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">${l}</div><div style="font-weight:700;font-size:12.5px;color:${c};font-family:'Geist Mono',monospace">${v}</div></div>`;
-    return`<div style="background:var(--card);border:1px solid ${isActive?a.color:'var(--border)'};border-radius:var(--r);padding:16px;transition:all .2s">
+    return`<div class="acct-card-drag" draggable="true" data-acct-idx="${idx}" data-acct-id="${a.id}" style="background:var(--card);border:1px solid ${isActive?a.color:'var(--border)'};border-radius:var(--r);padding:16px;transition:all .2s">
       <div style="display:flex;align-items:flex-start;gap:9px;margin-bottom:12px">
+        <div class="drag-handle" title="Drag to reorder">⠿</div>
         <div style="width:38px;height:38px;border-radius:9px;background:${a.color}20;display:flex;align-items:center;justify-content:center;font-size:17px;border:1px solid ${a.color}30;flex-shrink:0">${a.type==='Prop Firm'?'🏆':a.type==='Demo'?'🎮':a.type==='Paper'?'📝':'💼'}</div>
         <div style="flex:1"><div style="font-weight:700;font-size:14px;color:var(--t0)">${a.name}</div><div style="font-size:12px;color:var(--t2);margin-top:1px">${a.type} · ${a.broker||'—'} · ${a.currency}</div>${a.freshDate?`<div style="font-size:9.5px;color:var(--accent2);margin-top:2px">⚡ From ${a.freshDate}</div>`:''}</div>
         ${isActive?'<span class="badge bg" style="font-size:9px">ACTIVE</span>':''}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:10px">
         ${mbox2('Starting Bal','$'+(parseFloat(a.balance)||0).toFixed(0),'var(--t1)')}
-        ${mbox2('Total Deposited','+$'+(_a_dep=((a.depw||[]).filter(d=>d.type==='deposit').reduce((s,d)=>s+(parseFloat(d.amount)||0),0))).toFixed(0),'var(--green2)')}
+        ${mbox2('Total Deposited','+$'+((a.depw||[]).filter(d=>d.type==='deposit').reduce((s,d)=>s+(parseFloat(d.amount)||0),0)).toFixed(0),'var(--green2)')}
         ${mbox2('Equity',a.currency+' '+equity.toFixed(2),pnl>=0?'var(--green2)':'var(--red2)')}
         ${mbox2('Trade P&L',(pnl>=0?'+$':'-$')+Math.abs(pnl).toFixed(2),pnl>=0?'var(--green2)':'var(--red2)')}
         ${mbox2('Win Rate',wr+'%','var(--accent2)')}
-        ${mbox2('Withdrawal',(_a_wit=((a.depw||[]).filter(d=>d.type==='withdrawal').reduce((s,d)=>s+(parseFloat(d.amount)||0),0)))>0?'-$'+_a_wit.toFixed(0):'$0','var(--t2)')}
+        ${mbox2('Withdrawal',((a.depw||[]).filter(d=>d.type==='withdrawal').reduce((s,d)=>s+(parseFloat(d.amount)||0),0))>0?'-$'+((a.depw||[]).filter(d=>d.type==='withdrawal').reduce((s,d)=>s+(parseFloat(d.amount)||0),0)).toFixed(0):'$0','var(--t2)')}
       </div>
       <div style="font-size:12px;color:var(--t2);margin-bottom:10px">${trades.length} trades · ${lots} lots${(a.depw&&a.depw.length)?` · D/W: ${a.depw.length} entries`:''}</div>
       ${pfHtml}
@@ -1415,6 +1433,49 @@ function renderAccounts(){
       </div>
     </div>`;
   }).join('');
+  // Attach drag-and-drop events
+  initAcctDragDrop();
+}
+
+// ═══════════════════════════════════════════════════════════
+// ACCOUNT DRAG & DROP
+// ═══════════════════════════════════════════════════════════
+let _dragAcctIdx=null;
+function initAcctDragDrop(){
+  const cards=document.querySelectorAll('.acct-card-drag');
+  cards.forEach(card=>{
+    card.addEventListener('dragstart',e=>{
+      _dragAcctIdx=parseInt(card.dataset.acctIdx);
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain',_dragAcctIdx);
+    });
+    card.addEventListener('dragend',()=>{
+      card.classList.remove('dragging');
+      cards.forEach(c=>c.classList.remove('drag-over'));
+    });
+    card.addEventListener('dragover',e=>{
+      e.preventDefault();
+      e.dataTransfer.dropEffect='move';
+      card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave',()=>{
+      card.classList.remove('drag-over');
+    });
+    card.addEventListener('drop',e=>{
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      const fromIdx=_dragAcctIdx;
+      const toIdx=parseInt(card.dataset.acctIdx);
+      if(fromIdx===null||fromIdx===toIdx)return;
+      // Reorder
+      const [moved]=DB.accounts.splice(fromIdx,1);
+      DB.accounts.splice(toIdx,0,moved);
+      save('accounts');
+      renderAccounts();
+      toast('Reordered',`${moved.name} moved to position ${toIdx+1}`,'success');
+    });
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1511,10 +1572,541 @@ function setTheme(t){
 }
 
 // ═══════════════════════════════════════════════════════════
+// NOTES SYSTEM
+// ═══════════════════════════════════════════════════════════
+let _noteEditId=null,_noteActiveFolder='all';
+let _drawColor='#ff4444',_drawSize=3,_drawHistory=[],_drawHistoryIdx=-1,_drawing=false,_drawMode=false,_isEraser=false;
+
+function renderNotes(){
+  renderNoteFolders();
+  renderNoteList();
+}
+
+function renderNoteFolders(){
+  const list=document.getElementById('notes-folder-list');if(!list)return;
+  const allCount=DB.notes.length;
+  let html=`<div class="folder-item${_noteActiveFolder==='all'?' active':''}" onclick="setNoteFolder('all')"><span class="folder-ic">📋</span>All Notes<span class="folder-count">${allCount}</span></div>`;
+  DB.noteFolders.forEach(f=>{
+    const cnt=DB.notes.filter(n=>n.folderId===f.id).length;
+    html+=`<div class="folder-item${_noteActiveFolder===f.id?' active':''}" onclick="setNoteFolder('${f.id}')">
+      <span class="folder-ic">📁</span>${f.name}<span class="folder-count">${cnt}</span>
+      ${f.id!=='f_general'?`<span class="folder-del" onclick="event.stopPropagation();deleteFolder('${f.id}')" title="Delete">✕</span>`:''}
+    </div>`;
+  });
+  const linkedCount=DB.notes.filter(n=>n.tradeId).length;
+  html+=`<div class="folder-item${_noteActiveFolder==='linked'?' active':''}" onclick="setNoteFolder('linked')"><span class="folder-ic">🔗</span>Linked to Trades<span class="folder-count">${linkedCount}</span></div>`;
+  list.innerHTML=html;
+}
+
+function setNoteFolder(fid){
+  _noteActiveFolder=fid;
+  const title=document.getElementById('notes-folder-title');
+  if(fid==='all')title.textContent='All Notes';
+  else if(fid==='linked')title.textContent='Linked to Trades';
+  else{const f=DB.noteFolders.find(x=>x.id===fid);title.textContent=f?f.name:'Notes'}
+  renderNoteFolders();renderNoteList();
+}
+
+function renderNoteList(){
+  const list=document.getElementById('notes-list');if(!list)return;
+  let notes=[...DB.notes].sort((a,b)=>(b.updatedAt||b.createdAt||'').localeCompare(a.updatedAt||a.createdAt||''));
+  if(_noteActiveFolder==='linked')notes=notes.filter(n=>n.tradeId);
+  else if(_noteActiveFolder!=='all')notes=notes.filter(n=>n.folderId===_noteActiveFolder);
+  if(!notes.length){
+    list.innerHTML='<div class="empty" style="padding:60px 20px"><div class="empty-ic">📒</div><div class="empty-tl">No notes yet</div><div class="empty-sub">Click "+ New Note" to create your first learning note.</div></div>';
+    return;
+  }
+  list.innerHTML=notes.map(n=>{
+    const folder=DB.noteFolders.find(f=>f.id===n.folderId);
+    const trade=n.tradeId?DB.trades.find(t=>t.id===n.tradeId):null;
+    const hasDrawing=n.drawing&&n.drawing!=='data:,';
+    // Extract text preview from HTML content
+    const tmp=document.createElement('div');tmp.innerHTML=n.content||'';
+    const preview=tmp.textContent.slice(0,120);
+    // Count inline images
+    const imgCount=(n.content||'').match(/<img /g)?.length||0;
+    const date=n.updatedAt?n.updatedAt.slice(0,10):n.createdAt?n.createdAt.slice(0,10):'';
+    return`<div class="note-card" onclick="openNoteEditor('${n.id}')">
+      <div class="note-card-title">
+        ${n.title||'Untitled'}
+        ${trade?`<span class="note-card-linked">🔗 ${trade.symbol} ${trade.date}</span>`:''}
+      </div>
+      <div class="note-card-meta">
+        <span>${folder?'📁 '+folder.name:''}</span>
+        <span>${date}</span>
+        ${hasDrawing?'<span>✏️ Drawing</span>':''}
+        ${imgCount?`<span>📸 ${imgCount} image(s)</span>`:''}
+      </div>
+      ${preview?`<div class="note-card-preview">${preview}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function openNoteEditor(id){
+  _noteEditId=id||null;_drawMode=false;
+  const isEdit=!!id;
+  document.getElementById('note-editor-title').textContent=isEdit?'Edit Note':'New Note';
+  document.getElementById('note-delete-btn').style.display=isEdit?'inline-flex':'none';
+  // Populate folder select
+  const fsel=document.getElementById('note-folder-sel');
+  fsel.innerHTML=DB.noteFolders.map(f=>`<option value="${f.id}">${f.name}</option>`).join('');
+  // Populate trade link
+  const tsel=document.getElementById('note-trade-link');
+  const recentTrades=[...DB.trades].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,50);
+  tsel.innerHTML='<option value="">🔗 Link Trade</option>'+recentTrades.map(t=>`<option value="${t.id}">${t.date} — ${t.symbol} ${t.direction} (${(parseFloat(t.pnl)||0)>=0?'+$':'-$'}${Math.abs(parseFloat(t.pnl)||0).toFixed(2)})</option>`).join('');
+  tsel.onchange=()=>showNoteTradeDetails(tsel.value);
+  // Reset
+  document.getElementById('note-title').value='';
+  document.getElementById('note-content').innerHTML='';
+  document.getElementById('note-trade-details').style.display='none';
+  if(_noteActiveFolder!=='all'&&_noteActiveFolder!=='linked')fsel.value=_noteActiveFolder;
+  // Draw mode off
+  const drawBtn=document.getElementById('note-draw-btn');
+  if(drawBtn)drawBtn.classList.remove('active');
+  // Load if editing
+  if(isEdit){
+    const n=DB.notes.find(x=>x.id===id);
+    if(n){
+      document.getElementById('note-title').value=n.title||'';
+      document.getElementById('note-content').innerHTML=n.content||'';
+      fsel.value=n.folderId||'f_general';
+      tsel.value=n.tradeId||'';
+      if(n.tradeId)showNoteTradeDetails(n.tradeId);
+      // Make inline images resizable
+      setTimeout(()=>setupInlineImages(),100);
+    }
+  }
+  O('modal-note-editor');
+  // Init drawing canvas after modal is visible
+  setTimeout(()=>{
+    initDrawCanvas();
+    if(isEdit){
+      const n=DB.notes.find(x=>x.id===id);
+      if(n&&n.drawing){
+        const img=new Image();
+        img.onload=()=>{
+          const canvas=document.getElementById('draw-canvas');if(!canvas)return;
+          const ctx=canvas.getContext('2d');
+          ctx.drawImage(img,0,0,canvas.width,canvas.height);
+          _drawHistory=[canvas.toDataURL()];_drawHistoryIdx=0;
+        };
+        img.src=n.drawing;
+      }
+    }
+  },150);
+  // Setup paste handler for images
+  setupNotePaste();
+}
+
+function showNoteTradeDetails(tradeId){
+  const el=document.getElementById('note-trade-details');
+  if(!tradeId){el.style.display='none';return}
+  const t=DB.trades.find(x=>x.id===tradeId);
+  if(!t){el.style.display='none';return}
+  const a=acct(t.acctId);
+  const net=netPnL(t);
+  const hold=calcHold?calcHold(t.date,t.openTime,t.closeDate,t.closeTime):'—';
+  el.style.display='block';
+  const fields=[
+    ['Pair',`<strong style="font-size:13px">${t.symbol}</strong>`],
+    ['Direction',dirBadge(t.direction)],
+    ['Result',resultBadge(t)||'—'],
+    ['Date',t.date],
+    ['Open Time',t.openTime||'—'],
+    ['Close Time',t.closeTime||'—'],
+    ['Hold Time',hold||'—'],
+    ['Session',`<span style="color:var(--accent2)">${t.session||'—'}</span>`],
+    ['Setup',`<span style="color:var(--gold2);font-weight:600">${t.setup||'—'}</span>`],
+    ['Timeframe',t.tf||'—'],
+    ['Instrument',t.instrument||'—'],
+    ['Structure',t.structure||'—'],
+    ['Entry',`<span class="mono">${t.entry||'—'}</span>`],
+    ['Exit',`<span class="mono" style="color:var(--gold2)">${t.exitPrice||'—'}</span>`],
+    ['SL',`<span class="mono" style="color:var(--red2)">${t.sl||'—'}</span>`],
+    ['TP',`<span class="mono" style="color:var(--green2)">${t.tp||'—'}</span>`],
+    ['Lots',t.lots||'—'],
+    ['Gross P&L',fmtP(t.pnl)],
+    ['Commission',t.commission?`<span class="mono" style="color:var(--t2)">-$${Math.abs(parseFloat(t.commission)).toFixed(2)}</span>`:'—'],
+    ['Net P&L',fmtP(net)],
+    ['Planned R:R',`<span class="mono" style="color:var(--gold2)">${t.plannedRR||'—'}</span>`],
+    ['Actual R:R',`<span class="mono" style="color:var(--accent2);font-weight:700">${t.rr||'—'}</span>`],
+    ['Grade',gradeHtml(t.grade)],
+    ['Emotion',t.emotion||'—'],
+    ['Rules Followed',t.followedRules===true?'<span class="badge bg" style="font-size:9px">✓ Yes</span>':t.followedRules===false?'<span class="badge br" style="font-size:9px">✗ No</span>':'—'],
+    ['Account',a?.name||'—'],
+  ];
+  // Build trade notes and journal notes sections
+  let notesHtml='';
+  if(t.notes)notesHtml+=`<div style="margin-top:8px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs)"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);margin-bottom:4px;font-weight:700">Trade Notes</div><div style="font-size:12.5px;line-height:1.6;color:var(--t1)">${t.notes}</div></div>`;
+  if(t.journalNotes)notesHtml+=`<div style="margin-top:6px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs)"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);margin-bottom:4px;font-weight:700">📓 Journal Notes</div><div style="font-size:12.5px;line-height:1.6;color:var(--t1);white-space:pre-wrap">${t.journalNotes}</div></div>`;
+  // Trade screenshots
+  let ssHtml='';
+  if(t.screenshots&&t.screenshots.length){
+    ssHtml=`<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${t.screenshots.map(s=>`<img src="${s.data||s}" style="max-width:120px;height:auto;border-radius:4px;border:1px solid var(--border);cursor:pointer" onclick="window.open(this.src)">`).join('')}</div>`;
+  }
+  // TV Link
+  let tvHtml='';
+  if(t.tvLink){
+    tvHtml=`<a href="${t.tvLink}" target="_blank" class="btn btn-s btn-sm" style="margin-top:6px;display:inline-flex">📊 TradingView Chart</a>`;
+  }
+  // Tags
+  let tagsHtml='';
+  if(t.tags&&t.tags.length){
+    tagsHtml=`<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">${t.tags.map(tg=>`<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:var(--accent-d);color:var(--accent2)">${tg}</span>`).join('')}</div>`;
+  }
+  el.innerHTML=`<div style="margin:8px 16px 4px;padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rs)">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--accent2);font-weight:700;margin-bottom:8px">🔗 Linked Trade Details</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:5px">
+      ${fields.map(([l,v])=>`<div class="jd-item"><div class="jd-lbl" style="font-size:9px">${l}</div><div class="jd-val" style="font-size:11.5px">${v}</div></div>`).join('')}
+    </div>
+    ${tagsHtml}${notesHtml}${ssHtml}
+    ${tvHtml}
+  </div>`;
+}
+
+function setupNotePaste(){
+  const el=document.getElementById('note-content');
+  if(!el||el._pasteSetup)return;
+  el._pasteSetup=true;
+  // Paste images
+  el.addEventListener('paste',e=>{
+    const items=e.clipboardData?.items;
+    if(!items)return;
+    for(let i=0;i<items.length;i++){
+      if(items[i].type.startsWith('image/')){
+        e.preventDefault();
+        const blob=items[i].getAsFile();
+        const reader=new FileReader();
+        reader.onload=ev=>insertInlineImage(ev.target.result);
+        reader.readAsDataURL(blob);
+        return;
+      }
+    }
+  });
+  // Drop images
+  el.addEventListener('drop',e=>{
+    const files=e.dataTransfer?.files;
+    if(!files||!files.length)return;
+    const imgFiles=Array.from(files).filter(f=>f.type.startsWith('image/'));
+    if(!imgFiles.length)return;
+    e.preventDefault();
+    imgFiles.forEach(f=>{
+      const reader=new FileReader();
+      reader.onload=ev=>insertInlineImage(ev.target.result);
+      reader.readAsDataURL(f);
+    });
+  });
+  el.addEventListener('dragover',e=>e.preventDefault());
+  // Click on image to select/resize, click elsewhere to deselect
+  el.addEventListener('click',e=>{
+    // If clicked on an img inside the editor
+    if(e.target.tagName==='IMG'&&!_drawMode){
+      e.preventDefault();
+      selectNoteImage(e.target);
+    }else{
+      deselectNoteImage();
+    }
+  });
+}
+
+let _selectedImgWrap=null;
+let _deleteKeyHandler=null;
+function selectNoteImage(img){
+  deselectNoteImage();
+  if(_drawMode)return;
+  // Wrap image in a resize container
+  const wrap=document.createElement('span');
+  wrap.className='note-img-resize-wrap';
+  wrap.contentEditable='false';
+  wrap.style.width=img.offsetWidth+'px';
+  wrap.style.height=img.offsetHeight+'px';
+  img.parentNode.insertBefore(wrap,img);
+  wrap.appendChild(img);
+  img.style.width='100%';
+  img.style.height='100%';
+  img.style.margin='0';
+  // Add 8 resize handles
+  const handles=['tl','tr','bl','br','t','b','l','r'];
+  handles.forEach(h=>{
+    const hd=document.createElement('div');
+    hd.className='rh rh-'+h;
+    hd.addEventListener('mousedown',e=>startResize(e,wrap,img,h));
+    wrap.appendChild(hd);
+  });
+  _selectedImgWrap=wrap;
+  // Delete key removes selected image
+  _deleteKeyHandler=e=>{
+    if((e.key==='Delete'||e.key==='Backspace')&&_selectedImgWrap){
+      e.preventDefault();
+      deleteSelectedImage();
+    }
+  };
+  document.addEventListener('keydown',_deleteKeyHandler);
+}
+
+function deselectNoteImage(){
+  if(_deleteKeyHandler){document.removeEventListener('keydown',_deleteKeyHandler);_deleteKeyHandler=null}
+  if(!_selectedImgWrap)return;
+  const wrap=_selectedImgWrap;
+  const img=wrap.querySelector('img');
+  if(img&&wrap.parentNode){
+    img.style.width=wrap.offsetWidth+'px';
+    img.style.height=wrap.offsetHeight+'px';
+    img.style.margin='';
+    wrap.parentNode.insertBefore(img,wrap);
+    wrap.remove();
+  }
+  _selectedImgWrap=null;
+}
+
+function deleteSelectedImage(){
+  if(!_selectedImgWrap)return;
+  _selectedImgWrap.remove();
+  _selectedImgWrap=null;
+  if(_deleteKeyHandler){document.removeEventListener('keydown',_deleteKeyHandler);_deleteKeyHandler=null}
+}
+
+function startResize(e,wrap,img,handle){
+  e.preventDefault();e.stopPropagation();
+  const startX=e.clientX,startY=e.clientY;
+  const startW=wrap.offsetWidth,startH=wrap.offsetHeight;
+  const ratio=startH/startW;// preserve aspect for corners
+  function onMove(e2){
+    const dx=e2.clientX-startX;
+    const dy=e2.clientY-startY;
+    let w=startW,h=startH;
+    if(handle==='r'||handle==='tr'||handle==='br'){w=startW+dx}
+    if(handle==='l'||handle==='tl'||handle==='bl'){w=startW-dx}
+    if(handle==='b'||handle==='bl'||handle==='br'){h=startH+dy}
+    if(handle==='t'||handle==='tl'||handle==='tr'){h=startH-dy}
+    // Corners: keep aspect ratio
+    if(handle==='tl'||handle==='tr'||handle==='bl'||handle==='br'){
+      if(Math.abs(dx)>Math.abs(dy)){h=w*ratio}else{w=h/ratio}
+    }
+    w=Math.max(50,w);h=Math.max(30,h);
+    wrap.style.width=w+'px';
+    wrap.style.height=h+'px';
+  }
+  function onUp(){
+    document.removeEventListener('mousemove',onMove);
+    document.removeEventListener('mouseup',onUp);
+  }
+  document.addEventListener('mousemove',onMove);
+  document.addEventListener('mouseup',onUp);
+}
+
+function insertInlineImage(dataUrl){
+  const el=document.getElementById('note-content');
+  const img=document.createElement('img');
+  img.src=dataUrl;
+  img.style.maxWidth='100%';
+  img.style.width='400px';
+  img.draggable=false;
+  // Insert at cursor or end
+  const sel=window.getSelection();
+  if(sel.rangeCount&&el.contains(sel.anchorNode)){
+    const range=sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(img);
+    range.collapse(false);
+  }else{
+    el.appendChild(img);
+  }
+  el.focus();
+}
+
+function insertNoteImage(){document.getElementById('note-img-inp')?.click()}
+function handleNoteImgInsert(e){
+  Array.from(e.target.files).forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=ev=>insertInlineImage(ev.target.result);
+    reader.readAsDataURL(f);
+  });
+  e.target.value='';
+}
+
+function setupInlineImages(){
+  // No-op — images are handled via click-to-select now
+}
+
+function saveNote(){
+  const title=document.getElementById('note-title').value.trim();
+  if(!title){toast('Title required','','warn');return}
+  const contentEl=document.getElementById('note-content');
+  const canvas=document.getElementById('draw-canvas');
+  // Check if canvas has any drawing (non-transparent pixels)
+  let drawingData='';
+  if(canvas){
+    const ctx=canvas.getContext('2d');
+    const data=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    let hasPixels=false;
+    for(let i=3;i<data.length;i+=4){if(data[i]>0){hasPixels=true;break}}
+    if(hasPixels)drawingData=canvas.toDataURL();
+  }
+  const note={
+    id:_noteEditId||uid(),
+    title,
+    content:contentEl?contentEl.innerHTML:'',
+    folderId:document.getElementById('note-folder-sel').value||'f_general',
+    tradeId:document.getElementById('note-trade-link').value||'',
+    drawing:drawingData,
+    createdAt:_noteEditId?(DB.notes.find(n=>n.id===_noteEditId)?.createdAt||new Date().toISOString()):new Date().toISOString(),
+    updatedAt:new Date().toISOString(),
+  };
+  if(_noteEditId){
+    const i=DB.notes.findIndex(n=>n.id===_noteEditId);
+    if(i!==-1)DB.notes[i]=note;
+  }else{
+    DB.notes.unshift(note);
+  }
+  save('notes');C('modal-note-editor');renderNotes();
+  toast(_noteEditId?'Note updated':'Note saved',title,'success');
+}
+
+function deleteNote(){
+  if(!_noteEditId)return;
+  confirmAction('Delete Note','Delete this note permanently?',()=>{
+    DB.notes=DB.notes.filter(n=>n.id!==_noteEditId);
+    save('notes');C('modal-note-editor');renderNotes();
+    toast('Deleted','','warn');
+  });
+}
+
+// Folders
+function openFolderModal(){
+  document.getElementById('folder-name').value='';
+  document.getElementById('folder-modal-title').textContent='New Folder';
+  O('modal-folder');
+}
+function saveFolder(){
+  const name=document.getElementById('folder-name').value.trim();
+  if(!name){toast('Enter name','','warn');return}
+  DB.noteFolders.push({id:'f_'+uid(),name});
+  save('noteFolders');C('modal-folder');renderNotes();
+  toast('Folder created',name,'success');
+}
+function deleteFolder(fid){
+  confirmAction('Delete Folder','Notes in this folder will be moved to General.',()=>{
+    DB.notes.filter(n=>n.folderId===fid).forEach(n=>n.folderId='f_general');
+    DB.noteFolders=DB.noteFolders.filter(f=>f.id!==fid);
+    save('noteFolders');save('notes');
+    if(_noteActiveFolder===fid)_noteActiveFolder='all';
+    renderNotes();toast('Folder deleted','','warn');
+  });
+}
+
+// Drawing Canvas (overlay on entire note)
+function toggleDrawMode(){
+  _drawMode=!_drawMode;
+  const btn=document.getElementById('note-draw-btn');
+  const canvas=document.getElementById('draw-canvas');
+  const content=document.getElementById('note-content');
+  if(btn)btn.classList.toggle('active',_drawMode);
+  if(canvas)canvas.classList.toggle('active',_drawMode);
+  if(content)content.contentEditable=_drawMode?'false':'true';
+}
+
+function initDrawCanvas(){
+  const canvas=document.getElementById('draw-canvas');
+  if(!canvas)return;
+  // Reset
+  canvas._initialized=false;
+  canvas.classList.remove('active');
+  const wrap=document.getElementById('note-canvas-wrap');
+  if(!wrap)return;
+  // Size canvas to wrap
+  const resizeCanvas=()=>{
+    const rect=wrap.getBoundingClientRect();
+    const w=Math.max(rect.width,600);
+    const h=Math.max(wrap.scrollHeight,rect.height,500);
+    if(canvas.width!==w||canvas.height!==h){
+      // Save current drawing
+      const old=canvas.toDataURL();
+      canvas.width=w;canvas.height=h;
+      const ctx=canvas.getContext('2d');
+      ctx.lineCap='round';ctx.lineJoin='round';
+      // Restore
+      if(old&&old!=='data:,'){
+        const img=new Image();
+        img.onload=()=>ctx.drawImage(img,0,0);
+        img.src=old;
+      }
+    }
+  };
+  resizeCanvas();
+  _drawHistory=[];_drawHistoryIdx=-1;
+  saveDrawState();
+
+  if(canvas._initialized)return;
+  canvas._initialized=true;
+
+  function getPos(e){
+    const r=canvas.getBoundingClientRect();
+    const scaleX=canvas.width/r.width;
+    const scaleY=canvas.height/r.height;
+    const cx=e.touches?e.touches[0].clientX:e.clientX;
+    const cy=e.touches?e.touches[0].clientY:e.clientY;
+    return{x:(cx-r.left)*scaleX,y:(cy-r.top)*scaleY};
+  }
+  const ctx=canvas.getContext('2d');
+  ctx.lineCap='round';ctx.lineJoin='round';
+
+  canvas.addEventListener('mousedown',e=>{if(!_drawMode)return;_drawing=true;const p=getPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y)});
+  canvas.addEventListener('mousemove',e=>{if(!_drawing||!_drawMode)return;const p=getPos(e);ctx.globalCompositeOperation=_isEraser?'destination-out':'source-over';ctx.strokeStyle=_isEraser?'rgba(0,0,0,1)':_drawColor;ctx.lineWidth=_isEraser?_drawSize*4:_drawSize;ctx.lineTo(p.x,p.y);ctx.stroke()});
+  canvas.addEventListener('mouseup',()=>{if(_drawing){_drawing=false;ctx.globalCompositeOperation='source-over';saveDrawState()}});
+  canvas.addEventListener('mouseleave',()=>{if(_drawing){_drawing=false;ctx.globalCompositeOperation='source-over';saveDrawState()}});
+  // Touch
+  canvas.addEventListener('touchstart',e=>{if(!_drawMode)return;e.preventDefault();_drawing=true;const p=getPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y)},{passive:false});
+  canvas.addEventListener('touchmove',e=>{if(!_drawing||!_drawMode)return;e.preventDefault();const p=getPos(e);ctx.globalCompositeOperation=_isEraser?'destination-out':'source-over';ctx.strokeStyle=_isEraser?'rgba(0,0,0,1)':_drawColor;ctx.lineWidth=_isEraser?_drawSize*4:_drawSize;ctx.lineTo(p.x,p.y);ctx.stroke()},{passive:false});
+  canvas.addEventListener('touchend',()=>{if(_drawing){_drawing=false;ctx.globalCompositeOperation='source-over';saveDrawState()}});
+
+  // Re-size when content changes
+  const body=document.getElementById('note-editor-body');
+  if(body){
+    const observer=new MutationObserver(resizeCanvas);
+    observer.observe(document.getElementById('note-content'),{childList:true,subtree:true,characterData:true});
+    // Also on scroll/resize
+    body.addEventListener('scroll',resizeCanvas);
+  }
+}
+
+function saveDrawState(){
+  const canvas=document.getElementById('draw-canvas');if(!canvas)return;
+  if(_drawHistoryIdx<_drawHistory.length-1)_drawHistory=_drawHistory.slice(0,_drawHistoryIdx+1);
+  _drawHistory.push(canvas.toDataURL());
+  _drawHistoryIdx=_drawHistory.length-1;
+  if(_drawHistory.length>30){_drawHistory.shift();_drawHistoryIdx--}
+}
+function undoDrawing(){
+  if(_drawHistoryIdx<=0)return;
+  _drawHistoryIdx--;
+  const canvas=document.getElementById('draw-canvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const img=new Image();
+  img.onload=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0)};
+  img.src=_drawHistory[_drawHistoryIdx];
+}
+function clearDrawing(){
+  const canvas=document.getElementById('draw-canvas');if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  _drawHistory=[];_drawHistoryIdx=-1;saveDrawState();
+}
+function setDrawColor(c){_drawColor=c;_isEraser=false;const eb=document.getElementById('note-eraser-btn');if(eb)eb.classList.remove('active')}
+function setDrawSize(s){_drawSize=parseInt(s)||3}
+function toggleEraser(){
+  _isEraser=!_isEraser;
+  const eb=document.getElementById('note-eraser-btn');
+  if(eb)eb.classList.toggle('active',_isEraser);
+  // If not in draw mode, enable it
+  if(_isEraser&&!_drawMode)toggleDrawMode();
+}
+
+// ═══════════════════════════════════════════════════════════
 // EXPORT / IMPORT
 // ═══════════════════════════════════════════════════════════
 function exportJSON(backup=false){
-  const data={accounts:DB.accounts,trades:DB.trades,rules:DB.rules,sessions:DB.sessions,checklist:DB.checklist,pairs:DB.pairs,setups:DB.setups,settings:DB.settings,violations:DB.violations,_activeAcctId:st.activeAcctId,_version:4,_savedAt:new Date().toISOString()};
+  const data={accounts:DB.accounts,trades:DB.trades,rules:DB.rules,sessions:DB.sessions,checklist:DB.checklist,pairs:DB.pairs,setups:DB.setups,settings:DB.settings,violations:DB.violations,notes:DB.notes,noteFolders:DB.noteFolders,_activeAcctId:st.activeAcctId,_version:5,_savedAt:new Date().toISOString()};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download=backup?`FXJournal_${todayStr()}.json`:'FXJournal.json';
@@ -1533,6 +2125,8 @@ function importData(e){
       if(d.checklist)DB.checklist=d.checklist;if(d.pairs)DB.pairs=d.pairs;
       if(d.setups)DB.setups=d.setups;if(d.settings)DB.settings=d.settings;
       if(d.violations)DB.violations=d.violations;
+      if(d.notes)DB.notes=d.notes;
+      if(d.noteFolders)DB.noteFolders=d.noteFolders;
       saveAll();
       if(DB.settings.theme)document.documentElement.setAttribute('data-theme',DB.settings.theme);
       const _importedAcctId=d._activeAcctId;if(_importedAcctId&&DB.accounts.find(a=>a.id===_importedAcctId)){st.activeAcctId=_importedAcctId}else if(DB.accounts.length){st.activeAcctId=DB.accounts[0].id}S.set('activeAcct',st.activeAcctId);

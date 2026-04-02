@@ -461,3 +461,76 @@ tbody td{padding:9px 12px;font-size:13.5px}
 /* ══ WEEKLY SUMMARY FULL WIDTH ══ */
 #an-weekly-summary{padding:12px 14px}
 .an-weekly-outer{display:grid;grid-template-columns:1fr;gap:0}
+
+/* ══ COLLAPSIBLE CHECKLIST ══ */
+.chk-toggle-header{display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rs);cursor:pointer;margin-bottom:8px;transition:all .15s;user-select:none}
+.chk-toggle-header:hover{border-color:var(--border-s);background:var(--bg3)}
+.chk-toggle-arrow{font-size:10px;color:var(--accent2);transition:transform .25s ease;width:14px;text-align:center;flex-shrink:0}
+.chk-toggle-arrow.open{transform:rotate(90deg)}
+.chk-toggle-title{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--t0);flex:1}
+.chk-toggle-badge{font-size:10px;font-weight:600;color:var(--accent2);background:var(--accent-d);padding:2px 8px;border-radius:99px}
+.chk-collapse{max-height:0;overflow:hidden;transition:max-height .3s ease, opacity .25s ease;opacity:0}
+.chk-collapse.open{max-height:600px;opacity:1}
+
+/* ══ NOTES SECTION ══ */
+.notes-sidebar{width:220px;min-width:220px;background:var(--bg1);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.notes-main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.notes-list{flex:1;overflow-y:auto;padding:14px 16px}
+.folder-item{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--t1);border-bottom:1px solid var(--border);transition:all .12s;position:relative}
+.folder-item:hover{background:var(--bg2);color:var(--t0)}
+.folder-item.active{background:var(--accent-d);color:var(--accent2);font-weight:600}
+.folder-item.active::before{content:'';position:absolute;left:0;top:5px;bottom:5px;width:2.5px;background:var(--accent);border-radius:0 3px 3px 0}
+.folder-item .folder-ic{font-size:13px;width:18px;text-align:center;flex-shrink:0}
+.folder-item .folder-count{margin-left:auto;font-size:10px;color:var(--t3);font-weight:600;background:var(--bg3);padding:1px 6px;border-radius:99px}
+.folder-item .folder-del{display:none;margin-left:auto;font-size:11px;color:var(--t3);cursor:pointer;padding:2px 5px;border-radius:4px;transition:all .12s}
+.folder-item:hover .folder-del{display:block}
+.folder-item:hover .folder-count{display:none}
+.folder-item .folder-del:hover{color:var(--red2);background:var(--red-d)}
+
+/* Note Cards */
+.note-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:all .15s;position:relative}
+.note-card:hover{border-color:var(--border-s);transform:translateY(-1px);box-shadow:var(--shadow-s)}
+.note-card-title{font-size:14px;font-weight:700;color:var(--t0);margin-bottom:5px;display:flex;align-items:center;gap:7px}
+.note-card-meta{font-size:11px;color:var(--t3);display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.note-card-preview{font-size:12.5px;color:var(--t2);line-height:1.5;max-height:60px;overflow:hidden;text-overflow:ellipsis}
+.note-card-images{display:flex;gap:5px;margin-top:8px;overflow:hidden}
+.note-card-images img{width:60px;height:40px;object-fit:cover;border-radius:4px;border:1px solid var(--border)}
+.note-card-linked{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:99px;background:var(--accent-d);color:var(--accent2);font-size:10px;font-weight:600}
+
+/* Note Editor */
+.note-toolbar{padding:8px 16px;border-bottom:1px solid var(--border);background:var(--bg1);flex-shrink:0}
+.note-title-input{width:100%;background:none;border:none;outline:none;font-family:'Outfit',sans-serif;font-size:20px;font-weight:700;color:var(--t0);padding:4px 0;margin-bottom:6px}
+.note-title-input::placeholder{color:var(--t3)}
+.note-toolbar-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.note-toolbar-sel{width:auto;min-width:120px;font-size:11.5px;padding:4px 8px;height:28px}
+.note-draw-toggle.active,#note-eraser-btn.active{background:var(--accent-d)!important;border-color:var(--accent)!important;color:var(--accent2)!important;box-shadow:0 0 8px var(--accent-g)}
+.note-editor-body{flex:1;overflow-y:auto;background:var(--bg0);position:relative}
+.note-canvas-wrap{position:relative;min-height:100%;padding:0}
+.note-content-editable{outline:none;padding:20px 24px;min-height:400px;font-size:14px;line-height:1.8;color:var(--t0);font-family:'Outfit',sans-serif;word-wrap:break-word;overflow-wrap:break-word}
+.note-content-editable:empty::before{content:attr(data-placeholder);color:var(--t3);font-size:14px;pointer-events:none}
+.note-content-editable img{max-width:100%;border-radius:var(--rs);margin:4px 6px 4px 0;cursor:default;border:2px solid transparent;transition:border-color .15s;display:inline-block;vertical-align:top}
+.note-content-editable img:hover{border-color:var(--accent)}
+.note-img-resize-wrap{display:inline-block;position:relative;vertical-align:top;margin:4px 6px 4px 0}
+.note-img-resize-wrap img{display:block;width:100%;height:auto;border-radius:var(--rs);border:2px solid var(--accent);cursor:default;margin:0}
+.note-img-resize-wrap .rh{position:absolute;background:var(--accent);border:1.5px solid var(--bg0);border-radius:2px;z-index:5}
+.note-img-resize-wrap .rh-tl{top:-4px;left:-4px;width:8px;height:8px;cursor:nw-resize}
+.note-img-resize-wrap .rh-tr{top:-4px;right:-4px;width:8px;height:8px;cursor:ne-resize}
+.note-img-resize-wrap .rh-bl{bottom:-4px;left:-4px;width:8px;height:8px;cursor:sw-resize}
+.note-img-resize-wrap .rh-br{bottom:-4px;right:-4px;width:8px;height:8px;cursor:se-resize}
+.note-img-resize-wrap .rh-t{top:-4px;left:50%;transform:translateX(-50%);width:16px;height:6px;cursor:n-resize}
+.note-img-resize-wrap .rh-b{bottom:-4px;left:50%;transform:translateX(-50%);width:16px;height:6px;cursor:s-resize}
+.note-img-resize-wrap .rh-l{left:-4px;top:50%;transform:translateY(-50%);width:6px;height:16px;cursor:w-resize}
+.note-img-resize-wrap .rh-r{right:-4px;top:50%;transform:translateY(-50%);width:6px;height:16px;cursor:e-resize}
+.note-draw-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;touch-action:none}
+.note-draw-canvas.active{pointer-events:auto;cursor:crosshair}
+.note-trade-detail-card{margin:0 16px;padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rs);display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px}
+.note-trade-detail-card .jd-item .jd-lbl{font-size:9px}
+.note-trade-detail-card .jd-item .jd-val{font-size:11.5px}
+
+/* ══ DRAG & DROP ACCOUNTS ══ */
+.acct-card-drag{cursor:grab;transition:all .2s ease}
+.acct-card-drag:active{cursor:grabbing}
+.acct-card-drag.dragging{opacity:.4;transform:scale(.97);border-style:dashed!important}
+.acct-card-drag.drag-over{border-color:var(--accent)!important;box-shadow:0 0 16px var(--accent-g);transform:translateY(-2px)}
+.drag-handle{display:flex;align-items:center;justify-content:center;width:22px;color:var(--t3);font-size:14px;cursor:grab;flex-shrink:0;opacity:.4;transition:opacity .15s;user-select:none;letter-spacing:-2px}
+.drag-handle:hover{opacity:1;color:var(--t1)}

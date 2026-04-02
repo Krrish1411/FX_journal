@@ -41,6 +41,7 @@ let st={
   sortField:'date',sortDir:'desc',
 };
 
+let _unsaved=false,_saveTimer=null;
 if(!DB.accounts.length){
   const _defAcct={id:uid(),name:'Main Account',type:'Live',balance:0,curBalance:null,freshDate:null,currency:'USD',broker:'',color:'#3b82f6',pfRules:{},depw:[]};
   DB.accounts=[_defAcct];save('accounts');st.activeAcctId=_defAcct.id;S.set('activeAcct',_defAcct.id);
@@ -60,8 +61,6 @@ function activeTrades(id){
   return DB.trades.filter(t=>!aid||t.acctId===aid);
 }
 function todayStr(){return new Date().toISOString().slice(0,10)}
-
-let _unsaved=false,_saveTimer=null;
 function markUnsaved(){
   _unsaved=true;
   const el=document.getElementById('save-ind');

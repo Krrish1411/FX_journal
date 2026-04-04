@@ -106,7 +106,7 @@ function confirmAction(title,msg,cb){
 // ═══════════════════════════════════════════════════════════
 // NAV
 // ═══════════════════════════════════════════════════════════
-const TITLES={dash:'Dashboard',trades:'Trades',journal:'Journal',notes:'Notes',analytics:'Performance Analytics',accounts:'Accounts',rules:'Rules & Config',settings:'Settings'};
+const TITLES={dash:'Dashboard',trades:'Trades',journal:'Journal',notes:'Notes',analytics:'Performance Analytics',accounts:'Accounts',rules:'Rules & Config',settings:'Settings',report:'AI Report'};
 function nav(p){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelector(`[data-p="${p}"]`)?.classList.add('active');
@@ -2100,6 +2100,387 @@ function toggleEraser(){
   // If not in draw mode, enable it
   if(_isEraser&&!_drawMode)toggleDrawMode();
 }
+
+// ═══════════════════════════════════════════════════════════
+// AI REPORT & CHAT — GEMINI INTEGRATION
+// ═══════════════════════════════════════════════════════════
+const AI_MODEL='gemini-3-flash-preview';
+const AI_API_BASE='https://generativelanguage.googleapis.com/v1beta/models/';
+let _aiChatHistory=[];
+let _aiGenerating=false;
+
+// ── API Key Management ──
+function getAIKey(){return S.get('gemini_key','')}
+function saveAIKey(){
+  const inp=document.getElementById('ai-key-input');
+  const key=inp?.value.trim();
+  if(!key){toast('Enter API key','Get one from ai.google.dev','warn');return}
+  S.set('gemini_key',key);
+  inp.value='';
+  loadAISettings();
+  toast('API Key Saved','Key stored in browser','success');
+}
+function loadAISettings(){
+  const key=getAIKey();
+  const status=document.getElementById('ai-key-status');
+  const bar=document.getElementById('ai-key-bar');
+  const inp=document.getElementById('ai-key-input');
+  if(key){
+    if(status)status.textContent='✓ Key configured ('+key.slice(0,4)+'...'+key.slice(-4)+')';
+    if(bar)bar.classList.add('ai-key-connected');
+    if(inp)inp.placeholder='••••••••';
+  }else{
+    if(status)status.textContent='Not configured — get a free key from ai.google.dev';
+    if(bar)bar.classList.remove('ai-key-connected');
+  }
+}
+function testAIConnection(){
+  const key=getAIKey();
+  if(!key){toast('No key','Save an API key first','warn');return}
+  toast('Testing...','Connecting to Gemini','info');
+  callGemini('Reply with exactly: CONNECTION_OK',null,key)
+    .then(r=>{
+      if(r&&r.includes('CONNECTION_OK'))toast('Connected ✓','Gemini API working','success');
+      else toast('Connected','Got response from Gemini','success');
+    })
+    .catch(e=>toast('Connection failed',e.message,'error'));
+}
+
+// ── Tab Switching ──
+function switchAITab(tab){
+  document.getElementById('ai-tab-report').classList.toggle('active',tab==='report');
+  document.getElementById('ai-tab-chat').classList.toggle('active',tab==='chat');
+  document.getElementById('ai-panel-report').style.display=tab==='report'?'block':'none';
+  document.getElementById('ai-panel-chat').style.display=tab==='chat'?'flex':'none';
+  if(tab==='chat'){
+    const msgs=document.getElementById('ai-chat-messages');
+    if(msgs)msgs.scrollTop=msgs.scrollHeight;
+  }
+}
+
+// ── Build Trade Context for AI ──
+function buildTradeContext(scope){
+  let trades=[...activeTrades()];
+  const now=new Date();
+  if(scope==='7d')trades=trades.filter(t=>new Date(t.date)>=new Date(now-7*864e5));
+  else if(scope==='30d')trades=trades.filter(t=>new Date(t.date)>=new Date(now-30*864e5));
+  else if(scope==='3m')trades=trades.filter(t=>new Date(t.date)>=new Date(now-90*864e5));
+  trades.sort((a,b)=>a.date.localeCompare(b.date));
+
+  if(!trades.length)return null;
+
+  const a=acct();
+  const wins=trades.filter(t=>isWin(t));
+  const losses=trades.filter(t=>isLoss(t));
+  const pnl=trades.reduce((s,t)=>s+netPnL(t),0);
+  const gp=wins.reduce((s,t)=>s+netPnL(t),0);
+  const gl=Math.abs(losses.reduce((s,t)=>s+netPnL(t),0));
+  const wr=trades.length?(wins.length/trades.length*100).toFixed(1):0;
+  const pf=gl>0?(gp/gl).toFixed(2):(gp>0?'Infinity':'0');
+  const exp=trades.length?(pnl/trades.length).toFixed(2):'0';
+  const strk=getStreaks(trades);
+  const base=getAcctBase(a);
+  const equity=base+pnl;
+
+  // By pair
+  const byPair={};
+  trades.forEach(t=>{if(!byPair[t.symbol])byPair[t.symbol]={n:0,w:0,p:0};byPair[t.symbol].n++;byPair[t.symbol].p+=netPnL(t);if(isWin(t))byPair[t.symbol].w++});
+  // By session
+  const bySess={};
+  trades.forEach(t=>{const s=t.session||'Unknown';if(!bySess[s])bySess[s]={n:0,w:0,p:0};bySess[s].n++;bySess[s].p+=netPnL(t);if(isWin(t))bySess[s].w++});
+  // By setup
+  const bySetup={};
+  trades.forEach(t=>{const s=t.setup||'Unknown';if(!bySetup[s])bySetup[s]={n:0,w:0,p:0};bySetup[s].n++;bySetup[s].p+=netPnL(t);if(isWin(t))bySetup[s].w++});
+  // By emotion
+  const byEmo={};
+  trades.forEach(t=>{if(!t.emotion)return;t.emotion.split(', ').filter(Boolean).forEach(e=>{if(!byEmo[e])byEmo[e]={n:0,w:0,p:0};byEmo[e].n++;byEmo[e].p+=netPnL(t);if(isWin(t))byEmo[e].w++})});
+  // By day of week
+  const byDOW={Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0};
+  const dowNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  trades.forEach(t=>{const d=new Date(t.date).getDay();byDOW[dowNames[d]]+=netPnL(t)});
+  // By direction
+  const buys=trades.filter(t=>t.direction==='Buy');
+  const sells=trades.filter(t=>t.direction==='Sell');
+  // Rules
+  const rulesFollowed=trades.filter(t=>t.followedRules===true).length;
+  const rulesBroken=trades.filter(t=>t.followedRules===false).length;
+  // Grade distribution
+  const grades={'A+':0,'A':0,'B':0,'C':0};
+  trades.forEach(t=>{if(grades[t.grade]!==undefined)grades[t.grade]++});
+  // Recent trades detail (last 20 for deep analysis)
+  const recentDetail=trades.slice(-20).map(t=>`  ${t.date} | ${t.symbol} ${t.direction} | Setup:${t.setup||'?'} | Session:${t.session||'?'} | Entry:${t.entry} Exit:${t.exitPrice||'?'} SL:${t.sl||'?'} | Lots:${t.lots} | P&L:$${netPnL(t).toFixed(2)} | R:R:${t.rr||'?'} | Grade:${t.grade||'?'} | Emotion:${t.emotion||'?'} | Rules:${t.followedRules===true?'Yes':t.followedRules===false?'No':'?'} | Notes:${(t.notes||'').slice(0,80)}${t.journalNotes?' | Journal:'+t.journalNotes.slice(0,80):''}`).join('\n');
+  // ALL trades summary for pattern detection
+  const allTradesCSV=trades.map(t=>`${t.date},${t.symbol},${t.direction},${t.setup||''},${t.session||''},${t.entry},${t.exitPrice||''},${t.sl||''},${t.lots},${netPnL(t).toFixed(2)},${t.rr||''},${t.grade||''},${t.emotion||''},${t.followedRules===true?'Y':t.followedRules===false?'N':''},${t.tf||''}`).join('\n');
+
+  const fmtMap=o=>Object.entries(o).map(([k,v])=>`  ${k}: ${v.n} trades, WR ${v.n?(v.w/v.n*100).toFixed(0):0}%, P&L $${v.p.toFixed(2)}`).join('\n');
+  const fmtDOW=Object.entries(byDOW).map(([d,p])=>`  ${d}: $${p.toFixed(2)}`).join('\n');
+
+  return `
+=== TRADER PROFILE ===
+Name: ${DB.settings.name||'Trader'}
+Strategy: ${DB.settings.strategy||'Not specified'}
+Account: ${a?.name||'Unknown'} (${a?.type||'Live'}) — ${a?.broker||'Unknown broker'}
+Starting Balance: $${(parseFloat(a?.balance)||0).toFixed(2)}
+Current Equity: $${equity.toFixed(2)}
+Total Deposited: $${((a?.depw||[]).filter(d=>d.type==='deposit').reduce((s,d)=>s+(parseFloat(d.amount)||0),0)).toFixed(2)}
+Total Withdrawn: $${((a?.depw||[]).filter(d=>d.type==='withdrawal').reduce((s,d)=>s+(parseFloat(d.amount)||0),0)).toFixed(2)}
+${a?.type==='Prop Firm'&&a.pfRules?`Prop Firm Rules: Daily DD ${a.pfRules.dailyDD}%, Max DD ${a.pfRules.maxDD}%, Target ${a.pfRules.profitTarget}%`:''}
+
+=== OVERALL PERFORMANCE (${trades.length} trades, ${scope||'all time'}) ===
+Total P&L: $${pnl.toFixed(2)}
+Win Rate: ${wr}% (${wins.length}W / ${losses.length}L)
+Profit Factor: ${pf}
+Expectancy: $${exp} per trade
+Avg Win: $${wins.length?(gp/wins.length).toFixed(2):'0'}
+Avg Loss: -$${losses.length?(gl/losses.length).toFixed(2):'0'}
+Best Trade: +$${Math.max(0,...trades.map(t=>netPnL(t))).toFixed(2)}
+Worst Trade: -$${Math.abs(Math.min(0,...trades.map(t=>netPnL(t)))).toFixed(2)}
+Max Win Streak: ${strk.maxW}
+Max Loss Streak: ${strk.maxL}
+Total Lots: ${trades.reduce((s,t)=>s+(parseFloat(t.lots)||0),0).toFixed(2)}
+Total Commissions: $${trades.reduce((s,t)=>s+(parseFloat(t.commission)||0),0).toFixed(2)}
+Rules Followed: ${rulesFollowed}/${trades.length} (${trades.length?(rulesFollowed/trades.length*100).toFixed(0):0}%)
+Rules Broken: ${rulesBroken}
+Grades: A+ ${grades['A+']} | A ${grades['A']} | B ${grades['B']} | C ${grades['C']}
+Buys: ${buys.length} (WR ${buys.length?(buys.filter(t=>isWin(t)).length/buys.length*100).toFixed(0):0}%, P&L $${buys.reduce((s,t)=>s+netPnL(t),0).toFixed(2)})
+Sells: ${sells.length} (WR ${sells.length?(sells.filter(t=>isWin(t)).length/sells.length*100).toFixed(0):0}%, P&L $${sells.reduce((s,t)=>s+netPnL(t),0).toFixed(2)})
+
+=== BREAKDOWN BY PAIR ===
+${fmtMap(byPair)}
+
+=== BREAKDOWN BY SESSION ===
+${fmtMap(bySess)}
+
+=== BREAKDOWN BY SETUP ===
+${fmtMap(bySetup)}
+
+=== BREAKDOWN BY EMOTION ===
+${fmtMap(byEmo)}
+
+=== P&L BY DAY OF WEEK ===
+${fmtDOW}
+
+Trading Days: ${[...new Set(trades.map(t=>t.date))].length}
+Avg Hold Time: ${avgHoldTime(trades)}
+
+=== ALL TRADES (CSV: date,pair,direction,setup,session,entry,exit,SL,lots,netPnL,RR,grade,emotion,rules,TF) ===
+${allTradesCSV}
+
+=== LAST 20 TRADES (DETAILED) ===
+${recentDetail}
+
+=== ACTIVE RULES ===
+${DB.rules.map(r=>r.type==='custom'?r.text:`${ruleLabel(r.type)}: ${r.val}`).join('\n')}
+
+=== JOURNAL ENTRIES ===
+${trades.filter(t=>t.journalNotes?.trim()).slice(-10).map(t=>`${t.date} ${t.symbol}: ${t.journalNotes.slice(0,200)}`).join('\n')}
+`.trim();
+}
+
+// ── Gemini API Call ──
+async function callGemini(userPrompt, systemInstruction, apiKey){
+  const key=apiKey||getAIKey();
+  if(!key)throw new Error('No API key configured. Get one from ai.google.dev');
+  const url=`${AI_API_BASE}${AI_MODEL}:generateContent`;
+  const body={
+    contents:[{parts:[{text:userPrompt}]}],
+  };
+  if(systemInstruction){
+    body.system_instruction={parts:[{text:systemInstruction}]};
+  }
+  const res=await fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-goog-api-key':key},
+    body:JSON.stringify(body)
+  });
+  if(!res.ok){
+    const err=await res.json().catch(()=>({}));
+    const msg=err?.error?.message||`API error ${res.status}`;
+    throw new Error(msg);
+  }
+  const data=await res.json();
+  const candidate=data?.candidates?.[0];
+  if(!candidate)throw new Error('No response from Gemini');
+  if(candidate.finishReason==='SAFETY')throw new Error('Response blocked by safety filters');
+  return candidate.content?.parts?.map(p=>p.text).join('')||'';
+}
+
+// ── Markdown to HTML ──
+function mdToHtml(md){
+  if(!md)return '';
+  let html=md
+    // Code blocks
+    .replace(/```([\s\S]*?)```/g,'<pre><code>$1</code></pre>')
+    // Bold
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    // Italic
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/_(.+?)_/g,'<em>$1</em>')
+    // Inline code
+    .replace(/`(.+?)`/g,'<code>$1</code>')
+    // Headers — process line by line
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    // Blockquote
+    .replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>')
+    // HR
+    .replace(/^---$/gm,'<hr>')
+    // Unordered list items
+    .replace(/^[\-\*] (.+)$/gm,'<li>$1</li>')
+    // Ordered list items
+    .replace(/^\d+\. (.+)$/gm,'<li>$1</li>')
+    // Line breaks to paragraphs
+    .replace(/\n\n/g,'</p><p>')
+    .replace(/\n/g,'<br>');
+  // Wrap loose li in ul
+  html=html.replace(/(<li>.*?<\/li>(?:<br>)?)+/g,m=>'<ul>'+m.replace(/<br>/g,'')+'</ul>');
+  // Merge consecutive blockquotes
+  html=html.replace(/<\/blockquote><br><blockquote>/g,'<br>');
+  return '<p>'+html+'</p>';
+}
+
+// ── Generate AI Report ──
+async function generateAIReport(){
+  if(_aiGenerating)return;
+  const key=getAIKey();
+  if(!key){toast('No API Key','Configure your Gemini API key first','warn');return}
+  const scope=document.getElementById('ai-report-scope')?.value||'all';
+  const ctx=buildTradeContext(scope);
+  if(!ctx){document.getElementById('ai-report-output').innerHTML='<div class="ai-empty"><div class="ai-empty-icon">📭</div><div class="ai-empty-title">No Trades Found</div><div class="ai-empty-sub">Add some trades first, then come back for your AI analysis.</div></div>';return}
+
+  _aiGenerating=true;
+  const btn=document.getElementById('ai-gen-btn');
+  const icon=document.getElementById('ai-gen-icon');
+  if(btn)btn.disabled=true;
+  if(icon)icon.innerHTML='<span class="spin">⟳</span>';
+  const output=document.getElementById('ai-report-output');
+  output.innerHTML='<div class="ai-loading"><div class="ai-shimmer"></div><div class="ai-shimmer"></div><div class="ai-shimmer"></div><div class="ai-shimmer"></div><div class="ai-shimmer"></div><div class="ai-shimmer"></div><div class="ai-shimmer"></div><div class="ai-shimmer"></div><div class="ai-shimmer"></div><div class="ai-loading-text">🤖 Analyzing your trading journal with Gemini AI...</div></div>';
+
+  const systemPrompt=`You are an elite professional trading coach and analyst with decades of experience analyzing trader performance. You have been given complete access to a trader's journal data.
+
+Your job is to provide a DEEP, COMPREHENSIVE, and BRUTALLY HONEST analysis. Do NOT use a fixed template — instead, analyze the data freely and call out whatever you find important. Think like a mentor who genuinely wants this trader to improve.
+
+Your analysis should:
+- Be data-driven: reference specific numbers, percentages, pairs, setups, dates
+- Identify hidden patterns the trader might not see
+- Call out SPECIFIC things like "Your EURUSD Sell trades in London session have 85% win rate but you only take 3 of them — why?"
+- Point out dangerous patterns like revenge trading, overtrading, emotional patterns
+- Compare different segments (which pair is carrying your P&L vs which is bleeding)
+- Give SPECIFIC, ACTIONABLE advice — not generic trading wisdom
+- If something is really good, celebrate it. If something is really bad, be direct about it.
+- Include your own thinking and reasoning — "I notice X, which suggests Y, so you should Z"
+- Feel free to add sections you think are important based on what you see in the data
+- Use markdown formatting with headers (##), bold (**), lists, tables where helpful
+
+Do NOT give generic advice like "manage your risk" — instead say "Your average loss is $X which is 3x your average win — consider reducing position size on C-grade setups"
+
+Start with a brief executive summary, then dive deep into whatever the data reveals.`;
+
+  const userPrompt=`Here is the complete trading journal data. Analyze it thoroughly and give me your full, free-form analysis report. Don't hold back — tell me everything you see, think, and recommend.\n\n${ctx}`;
+
+  try{
+    const response=await callGemini(userPrompt, systemPrompt, key);
+    output.innerHTML='<div class="ai-report-content">'+mdToHtml(response)+'</div>';
+  }catch(e){
+    output.innerHTML=`<div class="ai-error"><span class="ai-error-icon">⚠️</span><div><strong>Error generating report</strong><br>${e.message}</div></div>`;
+  }finally{
+    _aiGenerating=false;
+    if(btn)btn.disabled=false;
+    if(icon)icon.textContent='✨';
+  }
+}
+
+// ── AI Chat System ──
+function sendAISuggestion(el){
+  const text=el?.textContent;
+  if(!text)return;
+  const inp=document.getElementById('ai-chat-input');
+  if(inp)inp.value=text;
+  sendAIChat();
+}
+
+async function sendAIChat(){
+  if(_aiGenerating)return;
+  const inp=document.getElementById('ai-chat-input');
+  const msg=inp?.value.trim();
+  if(!msg)return;
+  const key=getAIKey();
+  if(!key){toast('No API Key','Configure your Gemini API key first','warn');return}
+
+  inp.value='';
+  inp.style.height='auto';
+  const msgsEl=document.getElementById('ai-chat-messages');
+  const sendBtn=document.getElementById('ai-send-btn');
+  
+  // Hide suggestions after first message
+  const suggestions=document.getElementById('ai-suggestions');
+  if(suggestions)suggestions.style.display='none';
+
+  // Add user message
+  const userHtml=`<div class="ai-msg ai-msg-user"><div class="ai-msg-avatar">👤</div><div class="ai-msg-content"><div class="ai-msg-text">${escHtml(msg)}</div><div class="ai-msg-time">${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div></div></div>`;
+  msgsEl.insertAdjacentHTML('beforeend',userHtml);
+  
+  // Add typing indicator
+  const typingId='typing-'+Date.now();
+  msgsEl.insertAdjacentHTML('beforeend',`<div class="ai-typing" id="${typingId}"><div class="ai-typing-avatar">🤖</div><div class="ai-typing-dots"><div class="ai-typing-dot"></div><div class="ai-typing-dot"></div><div class="ai-typing-dot"></div></div></div>`);
+  msgsEl.scrollTop=msgsEl.scrollHeight;
+  
+  _aiGenerating=true;
+  if(sendBtn)sendBtn.disabled=true;
+
+  // Build context
+  const ctx=buildTradeContext('all');
+  const systemPrompt=`You are a friendly but expert AI trading assistant. You have FULL ACCESS to the trader's journal data (provided below). Answer their questions accurately and insightfully based on the actual data. Be conversational but data-driven. Use markdown formatting.
+
+When the trader asks something:
+- Reference specific numbers from their data
+- Give your honest opinion and reasoning
+- Be specific and actionable
+- If they ask something the data can answer, answer with exact figures
+- Feel free to add your own observations and tips
+- Be concise for simple questions, detailed for complex ones
+
+=== TRADER DATA ===
+${ctx||'No trades recorded yet.'}`;
+
+  // Build conversation history for multi-turn
+  _aiChatHistory.push({role:'user',text:msg});
+  const historyContext=_aiChatHistory.slice(-10).map(m=>`${m.role==='user'?'User':'Assistant'}: ${m.text}`).join('\n\n');
+  const fullPrompt=`Previous conversation:\n${historyContext}\n\nRespond to the user's latest message.`;
+
+  try{
+    const response=await callGemini(fullPrompt, systemPrompt, key);
+    _aiChatHistory.push({role:'assistant',text:response});
+    
+    // Remove typing indicator
+    const typingEl=document.getElementById(typingId);
+    if(typingEl)typingEl.remove();
+    
+    // Add AI response
+    const aiHtml=`<div class="ai-msg ai-msg-ai"><div class="ai-msg-avatar">🤖</div><div class="ai-msg-content"><div class="ai-msg-text">${mdToHtml(response)}</div><div class="ai-msg-time">${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div></div></div>`;
+    msgsEl.insertAdjacentHTML('beforeend',aiHtml);
+  }catch(e){
+    const typingEl=document.getElementById(typingId);
+    if(typingEl)typingEl.remove();
+    msgsEl.insertAdjacentHTML('beforeend',`<div class="ai-error"><span class="ai-error-icon">⚠️</span>${e.message}</div>`);
+  }finally{
+    _aiGenerating=false;
+    if(sendBtn)sendBtn.disabled=false;
+    msgsEl.scrollTop=msgsEl.scrollHeight;
+    inp?.focus();
+  }
+}
+
+function escHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+// Auto-resize chat input
+document.addEventListener('input',e=>{
+  if(e.target.id==='ai-chat-input'){
+    e.target.style.height='auto';
+    e.target.style.height=Math.min(e.target.scrollHeight,120)+'px';
+  }
+});
 
 // ═══════════════════════════════════════════════════════════
 // EXPORT / IMPORT

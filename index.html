@@ -37,7 +37,7 @@
   <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
     <div class="nav-item" data-p="analytics"><span class="nav-ic">▦</span>Performance</div>
-    
+    <div class="nav-item" data-p="report"><span class="nav-ic">🤖</span>AI Report</div>
   </div>
   <div class="nav-sec">
     <div class="nav-lbl">Manage</div>
@@ -359,6 +359,85 @@
           <div id="an-day-detail">
             <div class="empty" style="padding:30px"><div class="empty-ic">📅</div><div class="empty-tl">Click a day</div><div class="empty-sub">Click any day on the calendar to see trades</div></div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ AI REPORT ═══ -->
+  <div class="page" id="page-report">
+    <!-- API Key Setup -->
+    <div id="ai-key-bar" class="ai-key-bar">
+      <div class="ai-key-inner">
+        <div class="ai-key-icon">🔑</div>
+        <div class="ai-key-info">
+          <div class="ai-key-title">Gemini API Key</div>
+          <div class="ai-key-sub" id="ai-key-status">Not configured</div>
+        </div>
+        <input type="password" class="fi ai-key-input" id="ai-key-input" placeholder="Paste your API key from ai.google.dev" autocomplete="off">
+        <button class="btn btn-p btn-sm" onclick="saveAIKey()">Save Key</button>
+        <button class="btn btn-s btn-sm" onclick="testAIConnection()">Test</button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="ai-tabs">
+      <button class="ai-tab active" id="ai-tab-report" onclick="switchAITab('report')">📊 AI Analysis Report</button>
+      <button class="ai-tab" id="ai-tab-chat" onclick="switchAITab('chat')">💬 AI Chat Assistant</button>
+    </div>
+
+    <!-- ── REPORT TAB ── -->
+    <div id="ai-panel-report" class="ai-panel">
+      <div class="ai-report-header">
+        <div>
+          <div class="ai-report-title">AI Trading Analysis</div>
+          <div class="ai-report-sub">Powered by Gemini 3.1 Pro — analyzes every trade, pattern, and edge in your journal</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select class="fs" id="ai-report-scope" style="width:auto;min-width:140px;font-size:12px;padding:5px 10px">
+            <option value="all">All Time</option>
+            <option value="7d">Last 7 Days</option>
+            <option value="30d">Last 30 Days</option>
+            <option value="3m">Last 3 Months</option>
+          </select>
+          <button class="btn btn-p" id="ai-gen-btn" onclick="generateAIReport()">
+            <span id="ai-gen-icon">✨</span> Generate Report
+          </button>
+        </div>
+      </div>
+      <div id="ai-report-output" class="ai-report-output">
+        <div class="ai-empty">
+          <div class="ai-empty-icon">🤖</div>
+          <div class="ai-empty-title">Ready to Analyze Your Trading</div>
+          <div class="ai-empty-sub">Click "Generate Report" to get a comprehensive AI analysis of all your journal data. The AI will freely explore your data, identify patterns, call out strengths and weaknesses, and give you personalized recommendations.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CHAT TAB ── -->
+    <div id="ai-panel-chat" class="ai-panel" style="display:none">
+      <div class="ai-chat-container">
+        <div class="ai-chat-messages" id="ai-chat-messages">
+          <div class="ai-msg ai-msg-ai">
+            <div class="ai-msg-avatar">🤖</div>
+            <div class="ai-msg-content">
+              <div class="ai-msg-text">Hey! I'm your AI trading assistant. I have access to all your journal data — trades, P&L, setups, emotions, sessions, everything.<br><br>Ask me anything about your trading performance, patterns, or for guidance. Here are some ideas:</div>
+            </div>
+          </div>
+        </div>
+        <div class="ai-suggestions" id="ai-suggestions">
+          <div class="ai-chip" onclick="sendAISuggestion(this)">What's my best performing setup?</div>
+          <div class="ai-chip" onclick="sendAISuggestion(this)">Analyze my last 10 trades</div>
+          <div class="ai-chip" onclick="sendAISuggestion(this)">Which session should I avoid?</div>
+          <div class="ai-chip" onclick="sendAISuggestion(this)">Am I overtrading?</div>
+          <div class="ai-chip" onclick="sendAISuggestion(this)">Give me a trading plan for next week</div>
+          <div class="ai-chip" onclick="sendAISuggestion(this)">What are my biggest leaks?</div>
+          <div class="ai-chip" onclick="sendAISuggestion(this)">Rate my risk management</div>
+          <div class="ai-chip" onclick="sendAISuggestion(this)">How's my discipline and psychology?</div>
+        </div>
+        <div class="ai-chat-input-bar">
+          <textarea class="ai-chat-input" id="ai-chat-input" placeholder="Ask about your trading data..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIChat()}"></textarea>
+          <button class="ai-send-btn" id="ai-send-btn" onclick="sendAIChat()">➤</button>
         </div>
       </div>
     </div>

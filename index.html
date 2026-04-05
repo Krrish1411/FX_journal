@@ -36,6 +36,11 @@
     <div class="nav-item" data-p="notes"><span class="nav-ic">📒</span>Notes</div>
   </div>
   <div class="nav-sec">
+    <div class="nav-lbl">Tools & Resources</div>
+    <div class="nav-item" data-p="tools"><span class="nav-ic">🧰</span>Tools</div>
+    <div class="nav-item" data-p="guide" onclick="openGuideModal()"><span class="nav-ic">📖</span>How to Use</div>
+  </div>
+  <div class="nav-sec">
     <div class="nav-lbl">Analysis</div>
     <div class="nav-item" data-p="analytics"><span class="nav-ic">▦</span>Performance</div>
     <div class="nav-item" data-p="report"><span class="nav-ic">🤖</span>AI Report</div>
@@ -361,6 +366,124 @@
             <div class="empty" style="padding:30px"><div class="empty-ic">📅</div><div class="empty-tl">Click a day</div><div class="empty-sub">Click any day on the calendar to see trades</div></div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TOOLS ═══ -->
+  <div class="page" id="page-tools">
+    <div style="margin-bottom:20px">
+      <!-- Tool Info Card -->
+      <div class="tool-info-card">
+        <div class="tool-info-icon">🧰</div>
+        <div class="tool-info-content">
+          <h2 class="tool-info-title">Trading Tools Suite</h2>
+          <p class="tool-info-desc">Professional calculators and market insights to enhance your trading decisions. Access position sizing, profit/loss calculations, and real-time market session tracking—all designed to help you trade smarter.</p>
+          <div class="tool-info-why">
+            <strong>Why use these tools?</strong> Successful traders rely on precise calculations and timing. These tools eliminate guesswork, ensure proper risk management, and keep you aligned with optimal market hours.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tools Grid -->
+    <div class="tools-grid">
+      <!-- Position Calculator Card -->
+      <div class="tool-card" onclick="openToolModal('position')">
+        <div class="tool-card-header">
+          <div class="tool-card-icon">📐</div>
+          <div class="tool-card-status"></div>
+        </div>
+        <div class="tool-card-body">
+          <h3 class="tool-card-title">Position Size Calculator</h3>
+          <p class="tool-card-desc">Calculate optimal position sizes based on your risk tolerance and stop loss distance.</p>
+          <div class="tool-card-features">
+            <span class="tool-feature">Forex Majors</span>
+            <span class="tool-feature">XAU/XAG</span>
+            <span class="tool-feature">Crypto</span>
+          </div>
+        </div>
+        <div class="tool-card-footer">
+          <span class="tool-card-action">Open Tool →</span>
+        </div>
+      </div>
+
+      <!-- Gain/Loss Calculator Card -->
+      <div class="tool-card" onclick="openToolModal('gainloss')">
+        <div class="tool-card-header">
+          <div class="tool-card-icon">📊</div>
+          <div class="tool-card-status"></div>
+        </div>
+        <div class="tool-card-body">
+          <h3 class="tool-card-title">Gain/Loss Calculator</h3>
+          <p class="tool-card-desc">Project potential profit or loss before entering a trade with commission impact.</p>
+          <div class="tool-card-features">
+            <span class="tool-feature">P&L Projection</span>
+            <span class="tool-feature">Commission</span>
+            <span class="tool-feature">Return %</span>
+          </div>
+        </div>
+        <div class="tool-card-footer">
+          <span class="tool-card-action">Open Tool →</span>
+        </div>
+      </div>
+
+      <!-- Market Hours Card -->
+      <div class="tool-card" onclick="openToolModal('market')">
+        <div class="tool-card-header">
+          <div class="tool-card-icon">🌍</div>
+          <div class="tool-card-status" id="market-session-indicator"></div>
+        </div>
+        <div class="tool-card-body">
+          <h3 class="tool-card-title">Market Hours Tracker</h3>
+          <p class="tool-card-desc">Real-time session tracking with automatic daylight saving adjustments.</p>
+          <div class="tool-card-features">
+            <span class="tool-feature">4 Sessions</span>
+            <span class="tool-feature">DST Auto</span>
+            <span class="tool-feature">Timezone</span>
+          </div>
+        </div>
+        <div class="tool-card-footer">
+          <span class="tool-card-action">Open Tool →</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Tips Section -->
+    <div class="g3" style="margin-top:24px">
+      <div class="quick-tip-card">
+        <div class="quick-tip-icon">💡</div>
+        <div class="quick-tip-content">
+          <div class="quick-tip-title">Risk Management</div>
+          <div class="quick-tip-text">Never risk more than 1-2% of your account on a single trade. Use the position calculator to ensure proper sizing.</div>
+        </div>
+      </div>
+      <div class="quick-tip-card">
+        <div class="quick-tip-icon">🎯</div>
+        <div class="quick-tip-content">
+          <div class="quick-tip-title">Session Timing</div>
+          <div class="quick-tip-text">Trade during overlapping sessions (London-NY) for maximum volatility and liquidity.</div>
+        </div>
+      </div>
+      <div class="quick-tip-card">
+        <div class="quick-tip-icon">📈</div>
+        <div class="quick-tip-content">
+          <div class="quick-tip-title">Plan Your Trades</div>
+          <div class="quick-tip-text">Always calculate potential gain/loss before entering. Know your risk-reward ratio upfront.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tool Modal Overlay -->
+  <div class="overlay" id="tool-overlay" onclick="if(event.target===this) closeToolModal()">
+    <div class="modal modal-xl">
+      <div class="modal-hd">
+        <div class="modal-tl" id="tool-modal-title">Tool</div>
+        <button class="modal-x" onclick="closeToolModal()">✕</button>
+      </div>
+      <div class="modal-bd" id="tool-modal-content">
+        <!-- Dynamic content -->
       </div>
     </div>
   </div>

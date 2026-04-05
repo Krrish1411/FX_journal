@@ -12,12 +12,7 @@ let DB={
   accounts:S.get('accounts',[]),
   trades:S.get('trades',[]),
   rules:S.get('rules',[]),
-  sessions:S.get('sessions',[
-    {id:'s1',name:'London',start:'08:00',end:'17:00',color:'#3b82f6'},
-    {id:'s2',name:'New York',start:'13:00',end:'22:00',color:'#22c55e'},
-    {id:'s3',name:'Asian',start:'00:00',end:'09:00',color:'#f59e0b'},
-    {id:'s4',name:'Sydney',start:'22:00',end:'07:00',color:'#a78bfa'},
-  ]),
+  sessions:S.get('sessions',[]),
   checklist:S.get('checklist',['Structure confirmed on H4/Daily','Clear directional bias identified','Level (SBR/RBS/POI) identified','Entry criteria met','Trading session active','NOT entering on retracement','R:R minimum 1:2']),
   pairs:S.get('pairs',['XAUUSD','EURUSD','GBPUSD','USDJPY','GBPJPY','EURJPY','BTCUSD','ETHUSD','XAGUSD','AUDUSD','USDCAD']),
   setups:S.get('setups',DEFAULT_SETUPS),
@@ -26,6 +21,28 @@ let DB={
   notes:S.get('notes',[]),
   noteFolders:S.get('noteFolders',[{id:'f_general',name:'General'}]),
 };
+
+// ═══════════════════════════════════════════════════════════
+// REAL MARKET SESSIONS (FIXED - Independent of user settings)
+// These are the ACTUAL market hours in their local timezones
+// DO NOT modify these - they represent real global market hours
+// ═══════════════════════════════════════════════════════════
+const REAL_MARKET_SESSIONS = [
+  {id:'m1',name:'Sydney',start:'09:00',end:'17:00',color:'#a78bfa',localTz:'Australia/Sydney'},
+  {id:'m2',name:'Tokyo',start:'09:00',end:'17:00',color:'#f59e0b',localTz:'Asia/Tokyo'},
+  {id:'m3',name:'London',start:'08:00',end:'17:00',color:'#3b82f6',localTz:'Europe/London'},
+  {id:'m4',name:'New York',start:'09:30',end:'16:00',color:'#22c55e',localTz:'America/New_York'},
+];
+
+// Initialize default sessions if empty (for Rules section)
+if(DB.sessions.length===0){
+  DB.sessions=[
+    {id:'s1',name:'London',start:'08:00',end:'17:00',color:'#3b82f6',localTz:'Europe/London'},
+    {id:'s2',name:'New York',start:'09:30',end:'16:00',color:'#22c55e',localTz:'America/New_York'},
+    {id:'s3',name:'Tokyo',start:'09:00',end:'17:00',color:'#f59e0b',localTz:'Asia/Tokyo'},
+    {id:'s4',name:'Sydney',start:'09:00',end:'17:00',color:'#a78bfa',localTz:'Australia/Sydney'},
+  ];
+}
 
 let st={
   activeAcctId:S.get('activeAcct',null),
@@ -39,7 +56,6 @@ let st={
   charts:{},
   depwList:[],
   sortField:'date',sortDir:'desc',
-  guideShown:false,
 };
 
 let _unsaved=false,_saveTimer=null;
@@ -107,9 +123,9 @@ function confirmAction(title,msg,cb){
 // ═══════════════════════════════════════════════════════════
 // NAV
 // ═══════════════════════════════════════════════════════════
-const TITLES={dash:'Dashboard',trades:'Trades',journal:'Journal',notes:'Notes',tools:'Trading Tools',analytics:'Performance Analytics',accounts:'Accounts',rules:'Rules & Config',settings:'Settings',report:'AI Report',guide:'How to Use'};
+const TITLES={dash:'Dashboard',trades:'Trades',journal:'Journal',notes:'Notes',analytics:'Performance Analytics',accounts:'Accounts',rules:'Rules & Config',settings:'Settings',report:'AI Report','market-hours':'Market Hours Tracker','position-calc':'Position Size Calculator','gain-loss-calc':'Gain/Loss Calculator',instructions:'How to Use FX Journal'};
 function nav(p){
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.nav-item,.nav-subitem').forEach(n=>n.classList.remove('active'));
   document.querySelector(`[data-p="${p}"]`)?.classList.add('active');
   document.querySelectorAll('.page,.page-fill').forEach(pg=>pg.classList.remove('active'));
   document.getElementById('page-'+p)?.classList.add('active');
@@ -117,58 +133,24 @@ function nav(p){
   if(p==='dash')renderDash();
   else if(p==='trades')renderTrades();
   else if(p==='journal')renderJournal();
-  else if(p==='tools')renderToolsPage();
   else if(p==='analytics')renderAnalytics(st.anTab);
   else if(p==='accounts')renderAccounts();
   else if(p==='rules')renderRules();
   else if(p==='settings')loadSettings();
   else if(p==='notes')renderNotes();
   else if(p==='report')loadAISettings();
-  else if(p==='guide')openGuideModal();
+  else if(p==='market-hours')renderMarketHours();
+  else if(p==='position-calc')initPositionCalc();
+  else if(p==='gain-loss-calc')initGainLossCalc();
 }
-document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',()=>{if(n.dataset.p!=='guide')nav(n.dataset.p)}));
+document.querySelectorAll('.nav-item[data-p]').forEach(n=>n.addEventListener('click',()=>nav(n.dataset.p)));
+document.querySelectorAll('.nav-subitem').forEach(n=>n.addEventListener('click',()=>nav(n.dataset.p)));
 
-// ═══════════════════════════════════════════════════════════
-// TOOLS PAGE FUNCTIONS
-// ═══════════════════════════════════════════════════════════
-function renderToolsPage(){
-  updateMarketSessionIndicator();
-}
-
-function openToolModal(tool){
-  const overlay=document.getElementById('tool-overlay');
-  const title=document.getElementById('tool-modal-title');
-  const content=document.getElementById('tool-modal-content');
-  
-  if(tool==='position'){
-    title.textContent='📐 Position Size Calculator';
-    content.innerHTML=getPositionCalculatorHTML();
-    initPositionCalculator();
-  }else if(tool==='gainloss'){
-    title.textContent='📊 Gain/Loss Calculator';
-    content.innerHTML=getGainLossCalculatorHTML();
-    initGainLossCalculator();
-  }else if(tool==='market'){
-    title.textContent='🌍 Market Hours Tracker';
-    content.innerHTML=getMarketHoursHTML();
-    initMarketHours();
-  }
-  
-  overlay.classList.add('open');
-}
-
-function closeToolModal(){
-  document.getElementById('tool-overlay').classList.remove('open');
-}
-
-function updateMarketSessionIndicator(){
-  const ind=document.getElementById('market-session-indicator');
-  if(ind){
-    const active=getActiveSessions();
-    ind.style.background=active.length?'var(--green)':'var(--t3)';
-    ind.style.boxShadow=active.length?'0 0 8px var(--green)':'none';
-  }
-}
+// Dropdown toggle for Tools menu
+document.querySelector('[data-drop="tools"]')?.addEventListener('click',function(){
+  this.classList.toggle('active');
+  document.getElementById('submenu-tools')?.classList.toggle('open');
+});
 
 // ═══════════════════════════════════════════════════════════
 // CLOCK & SESSIONS
@@ -2669,6 +2651,545 @@ function tzLabel(){
   return labels[tz]||tz.split('/').pop();
 }
 
+// Get current time in user's timezone as minutes since midnight
+function getUserTimeMinutes(){
+  const tz=DB.settings.tz||'Asia/Kolkata';
+  const now=new Date();
+  const timeStr=now.toLocaleTimeString('en-US',{hour:'numeric',minute:'numeric',hour12:false,timeZone:tz});
+  const [h,m]=timeStr.split(':').map(Number);
+  return h*60+m;
+}
+
+// Check if a session (stored with local timezone) is active in user's timezone
+function inSessionUserTZ(s){
+  const userTz=DB.settings.tz||'Asia/Kolkata';
+  const sessionLocalTz=s.localTz||'UTC';
+  try{
+    const [sh,sm]=s.start.split(':').map(Number);
+    const [eh,em]=s.end.split(':').map(Number);
+    const now=new Date();
+    
+    // Create date objects for session start/end in the session's local timezone
+    const sessionStart=new Date(now.toLocaleString('en-US',{timeZone:sessionLocalTz}));
+    sessionStart.setHours(sh,sm,0,0);
+    
+    const sessionEnd=new Date(now.toLocaleString('en-US',{timeZone:sessionLocalTz}));
+    sessionEnd.setHours(eh,em,0,0);
+    
+    // Convert session times to user's timezone
+    const startInUserTz=new Date(sessionStart.toLocaleString('en-US',{timeZone:userTz}));
+    const endInUserTz=new Date(sessionEnd.toLocaleString('en-US',{timeZone:userTz}));
+    
+    const startH=startInUserTz.getHours();
+    const startM=startInUserTz.getMinutes();
+    const endH=endInUserTz.getHours();
+    const endM=endInUserTz.getMinutes();
+    
+    const startTime=startH*60+startM;
+    const endTime=endH*60+endM;
+    const currentTime=getUserTimeMinutes();
+    
+    if(startTime<endTime){
+      return currentTime>=startTime&&currentTime<endTime;
+    }else{
+      return currentTime>=startTime||currentTime<endTime;
+    }
+  }catch{return false}
+}
+
+function getActiveSessionsInUserTZ(){
+  const tz=DB.settings.tz||'Asia/Kolkata';
+  const tzLabelStr=tzLabel();
+  const now=new Date();
+  
+  // Use REAL_MARKET_SESSIONS for Market Hours (independent of user's rule sessions)
+  return REAL_MARKET_SESSIONS.filter(s=>{
+    try{
+      const [sh,sm]=s.start.split(':').map(Number);
+      const [eh,em]=s.end.split(':').map(Number);
+      const sessionLocalTz=s.localTz||'UTC';
+      
+      // Create date objects for session start/end in the session's local timezone
+      const sessionStart=new Date(now.toLocaleString('en-US',{timeZone:sessionLocalTz}));
+      sessionStart.setHours(sh,sm,0,0);
+      
+      const sessionEnd=new Date(now.toLocaleString('en-US',{timeZone:sessionLocalTz}));
+      sessionEnd.setHours(eh,em,0,0);
+      
+      // Convert to user timezone for display
+      const startOpts={hour:'2-digit',minute:'2-digit',hour12:false,timeZone:tz};
+      const endOpts={hour:'2-digit',minute:'2-digit',hour12:false,timeZone:tz};
+      
+      s._userStart=sessionStart.toLocaleTimeString('en-GB',startOpts);
+      s._userEnd=sessionEnd.toLocaleTimeString('en-GB',endOpts);
+      
+      return inSessionUserTZ(s);
+    }catch{return false}
+  }).map(s=>({...s,start:s._userStart,end:s._userEnd}));
+}
+
+// ═══════════════════════════════════════════════════════════
+// MARKET HOURS TRACKER
+// ═══════════════════════════════════════════════════════════
+const MAJOR_CITIES=[
+  {name:'New York',tz:'America/New_York',icon:'🗽'},
+  {name:'London',tz:'Europe/London',icon:'🏛️'},
+  {name:'Tokyo',tz:'Asia/Tokyo',icon:'🗼'},
+  {name:'Sydney',tz:'Australia/Sydney',icon:'🦘'},
+  {name:'Singapore',tz:'Asia/Singapore',icon:'🦁'},
+  {name:'Dubai',tz:'Asia/Dubai',icon:'🏙️'},
+];
+
+const SESSION_OVERLAPS=[
+  {name:'London-New York',sessions:['London','New York'],icon:'⚡'},
+  {name:'Tokyo-London',sessions:['Tokyo','London'],icon:'🌅'},
+  {name:'Sydney-Tokyo',sessions:['Sydney','Tokyo'],icon:'🌏'},
+];
+
+const MARKET_QUOTES=[
+  "Forget charts. Chill, learn, and grow harder. 📚",
+  "The best trade is sometimes no trade. Patience pays. ⏳",
+  "Markets close, but learning never stops. Keep studying! 💪",
+  "Rest today, conquer tomorrow. The market will always be there. 🎯",
+  "Success in trading comes from discipline, not constant action. 🧠"
+];
+
+function renderMarketHours(){
+  updateMHClock();
+  renderMHSessions();
+  renderMHActiveSessions();
+  renderMHWorldClocks();
+  renderMHOverlaps();
+}
+
+function updateMHClock(){
+  const now=new Date();
+  const tz=DB.settings.tz||'Asia/Kolkata';
+  const tzLabelStr=tzLabel();
+  const timeStr=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false,timeZone:tz});
+  const el=document.getElementById('mh-utc-clock');
+  if(el)el.textContent=timeStr;
+  
+  // Update clock label with user's timezone
+  const labelEl=document.querySelector('.mh-clock-label');
+  if(labelEl)labelEl.textContent=`Current ${tzLabelStr} Time`;
+  
+  // Update clock sub text
+  const subEl=document.querySelector('.mh-clock-sub');
+  if(subEl)subEl.textContent=`Market sessions shown in ${tzLabelStr}`;
+  
+  // Update status summary
+  const active=getActiveSessionsInUserTZ();
+  const summaryEl=document.getElementById('mh-status-summary');
+  if(summaryEl){
+    if(active.length>0){
+      summaryEl.innerHTML=active.map(s=>`
+        <div class="mh-status-item">
+          <div class="mh-status-dot" style="background:${s.color};color:${s.color}"></div>
+          <div class="mh-status-info">
+            <div class="mh-status-name">${s.name} Session</div>
+            <div class="mh-status-desc">${s.start} - ${s.end} ${tzLabelStr}</div>
+          </div>
+          <div class="mh-status-badge active">Open</div>
+        </div>
+      `).join('');
+    }else{
+      // Show random quote when market is closed
+      const randomQuote=MARKET_QUOTES[Math.floor(Math.random()*MARKET_QUOTES.length)];
+      summaryEl.innerHTML=`
+        <div class="mh-status-item mh-quote-item">
+          <div class="mh-status-dot" style="background:var(--t3);color:var(--t3)"></div>
+          <div class="mh-status-info">
+            <div class="mh-status-name">Market Closed</div>
+            <div class="mh-status-desc mh-quote-text">"${randomQuote}"</div>
+          </div>
+          <div class="mh-status-badge closed">Closed</div>
+        </div>
+      `;
+    }
+  }
+}
+
+function renderMHSessions(){
+  const container=document.getElementById('mh-sessions-list');
+  if(!container)return;
+  
+  const tz=DB.settings.tz||'Asia/Kolkata';
+  const tzLabelStr=tzLabel();
+  const now=new Date();
+  const currentTime=getUserTimeMinutes();
+  
+  // Use REAL_MARKET_SESSIONS for Market Hours (independent of user's rule sessions)
+  const sessions=REAL_MARKET_SESSIONS.map(s=>{
+    try{
+      const [sh,sm]=s.start.split(':').map(Number);
+      const [eh,em]=s.end.split(':').map(Number);
+      const sessionLocalTz=s.localTz||'UTC';
+      
+      // Create date objects for session start/end in the session's local timezone
+      const sessionStart=new Date(now.toLocaleString('en-US',{timeZone:sessionLocalTz}));
+      sessionStart.setHours(sh,sm,0,0);
+      
+      const sessionEnd=new Date(now.toLocaleString('en-US',{timeZone:sessionLocalTz}));
+      sessionEnd.setHours(eh,em,0,0);
+      
+      // Convert to user timezone for display
+      const startOpts={hour:'numeric',minute:'numeric',hour12:false,timeZone:tz};
+      const endOpts={hour:'numeric',minute:'numeric',hour12:false,timeZone:tz};
+      const startTimeStr=sessionStart.toLocaleTimeString('en-US',startOpts);
+      
+      const [startH,startM]=startTimeStr.split(':').map(Number);
+      const [endH,endM]=endTimeStr.split(':').map(Number);
+      
+      const startTime=startH*60+startM;
+      const endTime=endH*60+endM;
+      
+      let isActive=false;
+      if(startTime<endTime){
+        isActive=currentTime>=startTime&&currentTime<endTime;
+      }else{
+        isActive=currentTime>=startTime||currentTime<endTime;
+      }
+      
+      // Calculate progress
+      let progress=0;
+      const totalDuration=endTime>startTime?endTime-startTime:(24*60-startTime+endTime);
+      let elapsed=0;
+      if(startTime<endTime){
+        elapsed=Math.max(0,Math.min(totalDuration,currentTime-startTime));
+      }else{
+        if(currentTime>=startTime){
+          elapsed=currentTime-startTime;
+        }else{
+          elapsed=(24*60-startTime)+currentTime;
+        }
+      }
+      progress=totalDuration>0?(elapsed/totalDuration)*100:0;
+      
+      return {session:s,isActive,progress,startDisplay:startTimeStr,endDisplay:endTimeStr};
+    }catch{
+      return {session:s,isActive:false,progress:0,startDisplay:s.start,endDisplay:s.end};
+    }
+  });
+  
+  container.innerHTML=sessions.map(({session,isActive,progress,startDisplay,endDisplay})=>`
+    <div class="mh-session-row ${isActive?'active':''}">
+      <div class="mh-session-icon">${getSessionIcon(session.name)}</div>
+      <div class="mh-session-details">
+        <div class="mh-session-name">
+          ${session.name}
+          ${isActive?'<span style="font-size:8px;background:var(--green2);color:#fff;padding:2px 6px;border-radius:99px;font-weight:700">LIVE</span>':''}
+        </div>
+        <div class="mh-session-time">${startDisplay} - ${endDisplay} ${tzLabelStr}</div>
+        <div class="mh-session-bar">
+          <div class="mh-session-fill" style="width:${progress}%;background:${session.color}"></div>
+        </div>
+        <div class="mh-session-meta">
+          <span>${isActive?'🟢 Open':'🔴 Closed'}</span>
+          <span>Progress: ${Math.round(progress)}%</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function getSessionIcon(name){
+  const icons={'London':'🇬🇧','New York':'🇺🇸','Tokyo':'🇯🇵','Sydney':'🇦🇺'};
+  return icons[name]||'🌍';
+}
+
+function renderMHActiveSessions(){
+  const container=document.getElementById('mh-active-sessions');
+  if(!container)return;
+  
+  const tz=DB.settings.tz||'Asia/Kolkata';
+  const tzLabelStr=tzLabel();
+  const active=getActiveSessionsInUserTZ();
+  if(active.length===0){
+    container.innerHTML=`
+      <div style="text-align:center;padding:30px;color:var(--t3)">
+        <div style="font-size:42px;margin-bottom:10px">😴</div>
+        <div style="font-size:14px;font-weight:600">All markets are closed</div>
+        <div style="font-size:12px;margin-top:5px">Next session starts soon</div>
+      </div>
+    `;
+    return;
+  }
+  
+  container.innerHTML=active.map(s=>{
+    const [eh,em]=s.end.split(':').map(Number);
+    const endTime=eh*60+em;
+    const currentTime=getUserTimeMinutes();
+    let remaining=endTime-currentTime;
+    if(remaining<0)remaining+=24*60;
+    const remHours=Math.floor(remaining/60);
+    const remMins=remaining%60;
+    
+    return `
+      <div class="mh-active-item">
+        <div class="mh-active-icon">${getSessionIcon(s.name)}</div>
+        <div class="mh-active-info">
+          <div class="mh-active-name">${s.name} Session</div>
+          <div class="mh-active-time">Closes at ${s.end} ${tzLabelStr}</div>
+        </div>
+        <div class="mh-active-countdown">-${remHours.toString().padStart(2,'0')}:${remMins.toString().padStart(2,'0')}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderMHWorldClocks(){
+  const container=document.getElementById('mh-world-clocks');
+  if(!container)return;
+  
+  const now=new Date();
+  container.innerHTML=MAJOR_CITIES.map(city=>{
+    const timeStr=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:city.tz});
+    const dateStr=now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',timeZone:city.tz});
+    const dayOfWeek=now.toLocaleDateString('en-US',{weekday:'long',timeZone:city.tz}).toLowerCase();
+    const isWeekend=dayOfWeek.includes('saturday')||dayOfWeek.includes('sunday');
+    
+    return `
+      <div class="mh-world-item">
+        <div class="mh-world-city">${city.icon} ${city.name}</div>
+        <div class="mh-world-time">${timeStr}</div>
+        <div class="mh-world-date">${dateStr}</div>
+        <div class="mh-world-day ${isWeekend?'weekend':'weekday'}">${isWeekend?'Weekend':'Trading Day'}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderMHOverlaps(){
+  const container=document.getElementById('mh-overlaps');
+  if(!container)return;
+  
+  const tz=DB.settings.tz||'Asia/Kolkata';
+  const tzLabelStr=tzLabel();
+  const now=new Date();
+  const currentTime=getUserTimeMinutes();
+  
+  container.innerHTML=`
+    <div class="mh-overlap-grid">
+      ${SESSION_OVERLAPS.map(overlap=>{
+        const sessionData=overlap.sessions.map(sessName=>{
+          // Use REAL_MARKET_SESSIONS instead of DB.sessions
+          const s=REAL_MARKET_SESSIONS.find(x=>x.name===sessName);
+          if(!s)return null;
+          
+          try{
+            const [sh,sm]=s.start.split(':').map(Number);
+            const [eh,em]=s.end.split(':').map(Number);
+            
+            // Use session local timezone for accurate conversion
+            const sessionLocalTz=s.localTz||'UTC';
+
+            // Create date objects for session start/end in the session's local timezone
+            const sessionStart=new Date(now.toLocaleString('en-US',{timeZone:sessionLocalTz}));
+            sessionStart.setHours(sh,sm,0,0);
+
+            const sessionEnd=new Date(now.toLocaleString('en-US',{timeZone:sessionLocalTz}));
+            sessionEnd.setHours(eh,em,0,0);
+            
+            // Convert to user timezone for display
+            const dispOpts={hour:'numeric',minute:'numeric',hour12:false,timeZone:tz};
+            const startTimeStr=sessionStart.toLocaleTimeString('en-US',dispOpts);
+            const endTimeStr=sessionEnd.toLocaleTimeString('en-US',dispOpts);
+
+            const [startH,startM]=startTimeStr.split(':').map(Number);
+            const [endH,endM]=endTimeStr.split(':').map(Number);
+            
+            return {name:sessName,start:startH*60+startM,end:endH*60+endM,color:s.color,startDisplay:startTimeStr,endDisplay:endTimeStr};
+          }catch{
+            return null;
+          }
+        }).filter(Boolean);
+        
+        if(sessionData.length<2)return '';
+        
+        // Find overlap window
+        const overlapStart=Math.max(sessionData[0].start,sessionData[1].start);
+        const overlapEnd=Math.min(sessionData[0].end,sessionData[1].end);
+        
+        let isLive=false;
+        let isUpcoming=false;
+        
+        if(overlapStart<overlapEnd){
+          isLive=currentTime>=overlapStart&&currentTime<overlapEnd;
+          isUpcoming=!isLive&&currentTime<overlapStart&&overlapStart-currentTime<120;
+        }
+        
+        const statusClass=isLive?'live':(isUpcoming?'upcoming':'');
+        const statusText=isLive?'LIVE NOW':(isUpcoming?'Starting Soon':'Closed');
+        
+        return `
+          <div class="mh-overlap-item ${!isLive&&!isUpcoming?'inactive':''}">
+            <div class="mh-overlap-title">${overlap.icon} ${overlap.name} Overlap</div>
+            <div class="mh-overlap-sessions">${overlap.sessions.join(' × ')}</div>
+            <div class="mh-overlap-time">${sessionData[0].startDisplay} - ${sessionData[1].endDisplay} ${tzLabelStr}</div>
+            <div class="mh-overlap-status ${statusClass}">${statusText}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function formatOverlapTime(minutes){
+  const h=Math.floor(minutes/60);
+  const m=minutes%60;
+  return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
+}
+
+// Update market hours every second
+setInterval(()=>{
+  if(document.getElementById('page-market-hours')?.classList.contains('active')){
+    renderMarketHours();
+  }
+},1000);
+
+// ═══════════════════════════════════════════════════════════
+// POSITION SIZE CALCULATOR
+// ═══════════════════════════════════════════════════════════
+function initPositionCalc(){
+  // Just ensure the page is ready, values are already in HTML
+}
+
+function calculatePosition(){
+  const pair=document.getElementById('pos-pair').value;
+  const balance=parseFloat(document.getElementById('pos-balance').value)||0;
+  const riskPct=parseFloat(document.getElementById('pos-risk').value)||0;
+  const entry=parseFloat(document.getElementById('pos-entry').value)||0;
+  const slPips=parseFloat(document.getElementById('pos-sl').value)||0;
+  
+  if(!balance||!riskPct||!entry||!slPips){
+    toast('Please fill all fields','','warn');
+    return;
+  }
+  
+  const riskAmount=balance*(riskPct/100);
+  let pipValue,pipSize;
+  
+  // Determine pip size based on pair
+  if(pair.includes('JPY')){
+    pipSize=0.01;
+  }else if(pair==='XAUUSD'){
+    pipSize=0.10; // Gold pip
+  }else if(pair==='XAGUSD'){
+    pipSize=0.01; // Silver pip
+  }else if(['BTCUSD','ETHUSD'].includes(pair)){
+    pipSize=1.0; // Crypto
+  }else{
+    pipSize=0.0001; // Standard forex
+  }
+  
+  // Calculate pip value per standard lot (100,000 units)
+  if(pair.includes('JPY')){
+    pipValue=(pipSize*100000)/entry; // JPY pairs quote in JPY
+  }else if(pair==='XAUUSD'){
+    pipValue=10.0; // Gold: $1 per 0.10 move per lot
+  }else if(pair==='XAGUSD'){
+    pipValue=50.0; // Silver: $0.50 per 0.01 move per lot
+  }else if(pair.includes('USD')&&!pair.startsWith('USD')){
+    pipValue=pipSize*100000; // EURUSD, GBPUSD etc - pip value in USD
+  }else if(pair.startsWith('USD')){
+    pipValue=pipSize*100000/entry; // USDCHF, USDCAD
+  }else{
+    pipValue=pipSize*100000; // Default
+  }
+  
+  // Calculate position size
+  const lots=riskAmount/(slPips*pipValue);
+  
+  // Display results
+  document.getElementById('pos-lots').textContent=lots.toFixed(2);
+  document.getElementById('pos-risk-amt').textContent='$'+riskAmount.toFixed(2);
+  document.getElementById('pos-pip-value').textContent='$'+pipValue.toFixed(2);
+  document.getElementById('pos-result').style.display='block';
+  
+  toast('Position calculated successfully','','success');
+}
+
+// ═══════════════════════════════════════════════════════════
+// GAIN/LOSS CALCULATOR
+// ═══════════════════════════════════════════════════════════
+function initGainLossCalc(){
+  // Page is ready
+}
+
+function calculateGainLoss(){
+  const pair=document.getElementById('gl-pair').value;
+  const direction=document.getElementById('gl-direction').value;
+  const lots=parseFloat(document.getElementById('gl-lots').value)||0;
+  const entry=parseFloat(document.getElementById('gl-entry').value)||0;
+  const exit=parseFloat(document.getElementById('gl-exit').value)||0;
+  
+  if(!lots||!entry||!exit){
+    toast('Please fill all fields','','warn');
+    return;
+  }
+  
+  let pipSize;
+  if(pair.includes('JPY')){
+    pipSize=0.01;
+  }else if(pair==='XAUUSD'){
+    pipSize=0.10;
+  }else if(pair==='XAGUSD'){
+    pipSize=0.01;
+  }else if(['BTCUSD','ETHUSD'].includes(pair)){
+    pipSize=1.0;
+  }else{
+    pipSize=0.0001;
+  }
+  
+  // Calculate pips moved
+  let pipsMoved;
+  if(direction==='buy'){
+    pipsMoved=(exit-entry)/pipSize;
+  }else{
+    pipsMoved=(entry-exit)/pipSize;
+  }
+  
+  // Calculate pip value
+  let pipValue;
+  if(pair.includes('JPY')){
+    pipValue=(pipSize*100000)/entry;
+  }else if(pair==='XAUUSD'){
+    pipValue=10.0;
+  }else if(pair==='XAGUSD'){
+    pipValue=50.0;
+  }else if(pair.includes('USD')&&!pair.startsWith('USD')){
+    pipValue=pipSize*100000;
+  }else if(pair.startsWith('USD')){
+    pipValue=pipSize*100000/entry;
+  }else{
+    pipValue=pipSize*100000;
+  }
+  
+  // Calculate P&L
+  const pnl=pipsMoved*pipValue*lots;
+  const notionalValue=lots*100000*entry;
+  const returnPct=(pnl/notionalValue)*100;
+  
+  // Calculate R:R (assuming 1R = initial risk, use absolute value)
+  const rRatio=Math.abs(pnl)/(Math.abs(pnl)*0.5)||0; // Simplified
+  
+  // Display results
+  const pnlEl=document.getElementById('gl-pnl');
+  pnlEl.textContent=(pnl>=0?'+$':'-$')+Math.abs(pnl).toFixed(2);
+  pnlEl.style.color=pnl>=0?'var(--green2)':'var(--red2)';
+  
+  document.getElementById('gl-pips').textContent=Math.abs(pipsMoved).toFixed(1)+' pips';
+  document.getElementById('gl-return').textContent=returnPct.toFixed(2)+'%';
+  document.getElementById('gl-rr').textContent=(Math.abs(pnl)/100).toFixed(1)+':1';
+  document.getElementById('gl-result').style.display='block';
+  
+  toast('P&L calculated successfully','','success');
+}
+
+// ═══════════════════════════════════════════════════════════
+// INITIALIZATION
+// ═══════════════════════════════════════════════════════════
 function init(){
   try{
     const theme=DB.settings.theme||'amoled';
@@ -2685,12 +3206,6 @@ function init(){
     populateFilters();
     renderDash();
     checkRules();
-    
-    // Show guide popup on first time (no trades)
-    if(DB.trades.length===0&&!st.guideShown){
-      openGuideModal();
-      st.guideShown=true;
-    }
   }catch(err){
     console.error('init error:',err);
     // Retry once after a tick in case DOM wasn't fully ready
@@ -2704,586 +3219,3 @@ if(document.readyState==='loading'){
   init();
 }
 setInterval(checkRules,60000);
-
-// ═══════════════════════════════════════════════════════════
-// TOOLS HTML GENERATORS & INITIALIZERS
-// ═══════════════════════════════════════════════════════════
-
-function getPositionCalculatorHTML(){
-  return `
-    <div class="tool-detail-header">
-      <div class="tool-detail-icon">📐</div>
-      <div class="tool-detail-info">
-        <div class="tool-detail-title">Position Size Calculator</div>
-        <div class="tool-detail-desc">Calculate the perfect position size for your trades based on your risk tolerance. This tool helps you manage risk properly by determining how many lots/units to trade.</div>
-        <div class="tool-detail-why"><strong>Why use this?</strong> Proper position sizing ensures you never risk too much on a single trade and helps maintain consistent risk management.</div>
-      </div>
-    </div>
-    
-    <div class="calc-grid">
-      <div class="fg">
-        <label class="fl">Instrument / Pair</label>
-        <select class="fs" id="pc-pair" onchange="updatePipInfo()">
-          <optgroup label="Major Forex Pairs">
-            <option value="EURUSD">EUR/USD</option>
-            <option value="GBPUSD">GBP/USD</option>
-            <option value="USDJPY">USD/JPY</option>
-            <option value="USDCHF">USD/CHF</option>
-            <option value="AUDUSD">AUD/USD</option>
-            <option value="USDCAD">USD/CAD</option>
-            <option value="NZDUSD">NZD/USD</option>
-          </optgroup>
-          <optgroup label="Metals & Crypto">
-            <option value="XAUUSD">Gold (XAU/USD)</option>
-            <option value="XAGUSD">Silver (XAG/USD)</option>
-            <option value="BTCUSD">Bitcoin (BTC/USD)</option>
-            <option value="ETHUSD">Ethereum (ETH/USD)</option>
-          </optgroup>
-        </select>
-      </div>
-      <div class="fg">
-        <label class="fl">Account Balance ($)</label>
-        <input type="number" class="fi" id="pc-balance" placeholder="10000" value="10000">
-      </div>
-      <div class="fg">
-        <label class="fl">Risk Percentage (%)</label>
-        <input type="number" class="fi" id="pc-risk" placeholder="1" value="1" step="0.1">
-      </div>
-      <div class="fg">
-        <label class="fl">Entry Price</label>
-        <input type="number" class="fi" id="pc-entry" placeholder="Enter price" step="0.00001">
-      </div>
-      <div class="fg">
-        <label class="fl">Stop Loss Price</label>
-        <input type="number" class="fi" id="pc-sl" placeholder="SL price" step="0.00001">
-      </div>
-    </div>
-    
-    <div class="pip-info-box">
-      <div class="pip-info-title">📏 Pip Calculation Info</div>
-      <div id="pc-pip-info" class="pip-info-content">Select a pair to see pip calculation details</div>
-    </div>
-    
-    <button class="btn btn-p" style="width:100%;margin-top:16px;padding:12px" onclick="calculatePositionSize()">Calculate Position Size</button>
-    
-    <div id="pc-results" class="calc-result-box" style="display:none">
-      <div class="calc-result-row"><span class="calc-result-label">Risk Amount:</span><span class="calc-result-value" id="pc-risk-amt">$0.00</span></div>
-      <div class="calc-result-row"><span class="calc-result-label">Pip Value:</span><span class="calc-result-value" id="pc-pip-val">$0.00</span></div>
-      <div class="calc-result-row highlight"><span class="calc-result-label">Position Size:</span><span class="calc-result-value" id="pc-position">0.00 lots</span></div>
-      <div class="calc-result-row"><span class="calc-result-label">Units:</span><span class="calc-result-value" id="pc-units">0</span></div>
-      <div class="calc-result-row"><span class="calc-result-label">Distance to SL:</span><span class="calc-result-value" id="pc-distance">0 pips</span></div>
-    </div>
-    
-    <div class="ref-section" style="margin-top:20px">
-      <div class="ref-section-title">📚 Quick Reference</div>
-      <div class="ref-item"><div class="ref-item-icon">💡</div><div class="ref-item-content"><div class="ref-item-title">Standard Lot Sizes</div><div class="ref-item-desc">Forex: 100,000 units | Gold: 100 oz | Silver: 5,000 oz | Crypto: 1 coin</div></div></div>
-      <div class="ref-item"><div class="ref-item-icon">⚠️</div><div class="ref-item-content"><div class="ref-item-title">Risk Management Rule</div><div class="ref-item-desc">Never risk more than 1-2% of your account on a single trade</div></div></div>
-      <div class="ref-item"><div class="ref-item-icon">🎯</div><div class="ref-item-content"><div class="ref-item-title">Position Formula</div><div class="ref-item-desc">Position = (Account × Risk%) ÷ (SL in pips × Pip Value)</div></div></div>
-    </div>
-  `;
-}
-
-function updatePipInfo(){
-  const pair=document.getElementById('pc-pair')?.value||'EURUSD';
-  const info=document.getElementById('pc-pip-info');
-  if(!info)return;
-  
-  let text='';
-  if(pair.includes('JPY')){
-    text='For JPY pairs: 1 pip = 0.01 (2nd decimal place). Example: USDJPY move from 149.50 to 149.51 = 1 pip';
-  }else if(pair==='XAUUSD'){
-    text='For Gold: 1 pip = $0.10 move. A move from $2030.00 to $2030.10 = 1 pip';
-  }else if(pair==='XAGUSD'){
-    text='For Silver: 1 pip = $0.01 move. A move from $23.50 to $23.51 = 1 pip';
-  }else if(pair==='BTCUSD'){
-    text='For Bitcoin: 1 pip = $1.00 move. A move from $67,500 to $67,501 = 1 pip';
-  }else if(pair==='ETHUSD'){
-    text='For Ethereum: 1 pip = $0.01 move. A move from $3,450.00 to $3,450.01 = 1 pip';
-  }else{
-    text='For most pairs: 1 pip = 0.0001 (4th decimal place). Example: EURUSD move from 1.0850 to 1.0851 = 1 pip';
-  }
-  info.textContent=text;
-}
-
-function initPositionCalculator(){
-  updatePipInfo();
-}
-
-function calculatePositionSize(){
-  const pair=document.getElementById('pc-pair')?.value||'EURUSD';
-  const balance=parseFloat(document.getElementById('pc-balance')?.value)||10000;
-  const riskPct=parseFloat(document.getElementById('pc-risk')?.value)||1;
-  const entry=parseFloat(document.getElementById('pc-entry')?.value)||0;
-  const sl=parseFloat(document.getElementById('pc-sl')?.value)||0;
-  
-  if(!entry||!sl){toast('Error','Please enter both entry and stop loss prices','error');return;}
-  
-  const riskAmt=balance*(riskPct/100);
-  const dist=Math.abs(entry-sl);
-  
-  // Calculate pips based on pair
-  let pips,pipValue;
-  if(pair.includes('JPY')){
-    pips=dist/0.01;
-    pipValue=1000*0.01/dist*dist; // Simplified
-  }else if(pair==='XAUUSD'){
-    pips=dist/0.10;
-    pipValue=10; // per standard lot
-  }else if(pair==='XAGUSD'){
-    pips=dist/0.01;
-    pipValue=50;
-  }else if(pair==='BTCUSD'){
-    pips=dist/1;
-    pipValue=1;
-  }else if(pair==='ETHUSD'){
-    pips=dist/0.01;
-    pipValue=0.01;
-  }else{
-    pips=dist/0.0001;
-    pipValue=10; // per standard lot for forex
-  }
-  
-  const position=riskAmt/(pips*pipValue);
-  const units=position*100000;
-  
-  document.getElementById('pc-risk-amt').textContent='$'+riskAmt.toFixed(2);
-  document.getElementById('pc-pip-val').textContent='$'+pipValue.toFixed(2);
-  document.getElementById('pc-position').textContent=position.toFixed(2)+' lots';
-  document.getElementById('pc-units').textContent=Math.round(units).toLocaleString();
-  document.getElementById('pc-distance').textContent=pips.toFixed(1)+' pips';
-  document.getElementById('pc-results').style.display='block';
-}
-
-function getGainLossCalculatorHTML(){
-  return `
-    <div class="tool-detail-header">
-      <div class="tool-detail-icon">📊</div>
-      <div class="tool-detail-info">
-        <div class="tool-detail-title">Gain/Loss Calculator</div>
-        <div class="tool-detail-desc">Project potential profit or loss before entering a trade. See the impact of commissions and calculate your return percentage.</div>
-        <div class="tool-detail-why"><strong>Why use this?</strong> Knowing your potential outcome before entering helps you make informed decisions and maintain proper risk-reward ratios.</div>
-      </div>
-    </div>
-    
-    <div class="calc-grid">
-      <div class="fg">
-        <label class="fl">Instrument</label>
-        <select class="fs" id="gl-pair">
-          <option value="forex">Forex Majors</option>
-          <option value="gold">Gold/Silver</option>
-          <option value="crypto">Crypto</option>
-        </select>
-      </div>
-      <div class="fg">
-        <label class="fl">Position Size (lots)</label>
-        <input type="number" class="fi" id="gl-lots" placeholder="1.0" value="1" step="0.01">
-      </div>
-      <div class="fg">
-        <label class="fl">Entry Price</label>
-        <input type="number" class="fi" id="gl-entry" placeholder="Enter price" step="0.00001">
-      </div>
-      <div class="fg">
-        <label class="fl">Exit Price (Target/SL)</label>
-        <input type="number" class="fi" id="gl-exit" placeholder="Exit price" step="0.00001">
-      </div>
-      <div class="fg">
-        <label class="fl">Direction</label>
-        <select class="fs" id="gl-dir">
-          <option value="buy">Buy (Long)</option>
-          <option value="sell">Sell (Short)</option>
-        </select>
-      </div>
-      <div class="fg">
-        <label class="fl">Commission ($)</label>
-        <input type="number" class="fi" id="gl-comm" placeholder="Per lot" value="3" step="0.1">
-      </div>
-    </div>
-    
-    <button class="btn btn-p" style="width:100%;margin-top:16px;padding:12px" onclick="calculateGainLoss()">Calculate P&L</button>
-    
-    <div id="gl-result" class="gl-result" style="display:none">
-      <div class="gl-result-value" id="gl-pnl">$0.00</div>
-      <div class="gl-result-label">Net Profit/Loss</div>
-      <div class="gl-result-details">
-        <div class="gl-detail"><div class="gl-detail-val" id="gl-gross">$0.00</div><div class="gl-detail-lbl">Gross P&L</div></div>
-        <div class="gl-detail"><div class="gl-detail-val" id="gl-commission">$0.00</div><div class="gl-detail-lbl">Commission</div></div>
-        <div class="gl-detail"><div class="gl-detail-val" id="gl-return">0%</div><div class="gl-detail-lbl">Return %</div></div>
-      </div>
-    </div>
-  `;
-}
-
-function initGainLossCalculator(){}
-
-function calculateGainLoss(){
-  const inst=document.getElementById('gl-pair')?.value||'forex';
-  const lots=parseFloat(document.getElementById('gl-lots')?.value)||1;
-  const entry=parseFloat(document.getElementById('gl-entry')?.value)||0;
-  const exit=parseFloat(document.getElementById('gl-exit')?.value)||0;
-  const dir=document.getElementById('gl-dir')?.value||'buy';
-  const commPerLot=parseFloat(document.getElementById('gl-comm')?.value)||0;
-  
-  if(!entry||!exit){toast('Error','Please enter both entry and exit prices','error');return;}
-  
-  let diff=exit-entry;
-  if(dir==='sell')diff=entry-exit;
-  
-  // Calculate based on instrument type
-  let grossPnL;
-  if(inst==='forex'){
-    grossPnL=diff/0.0001*10*lots;
-  }else if(inst==='gold'){
-    grossPnL=diff/0.10*10*lots;
-  }else if(inst==='crypto'){
-    grossPnL=diff*lots;
-  }
-  
-  const totalComm=commPerLot*lots;
-  const netPnL=grossPnL-totalComm;
-  const margin=lots*100000*0.01; // Assuming 1% margin
-  const returnPct=(netPnL/margin)*100;
-  
-  const resultEl=document.getElementById('gl-result');
-  const pnlEl=document.getElementById('gl-pnl');
-  pnlEl.textContent=(netPnL>=0?'+':'')+'$'+netPnL.toFixed(2);
-  pnlEl.className='gl-result-value '+(netPnL>=0?'positive':'negative');
-  
-  document.getElementById('gl-gross').textContent=(grossPnL>=0?'+':'')+'$'+grossPnL.toFixed(2);
-  document.getElementById('gl-commission').textContent='-$'+totalComm.toFixed(2);
-  document.getElementById('gl-return').textContent=returnPct.toFixed(2)+'%';
-  resultEl.style.display='block';
-}
-
-function getMarketHoursHTML(){
-  return `
-    <div class="tool-detail-header">
-      <div class="tool-detail-icon">🌍</div>
-      <div class="tool-detail-info">
-        <div class="tool-detail-title">Market Hours Tracker</div>
-        <div class="tool-detail-desc">Real-time tracking of major forex trading sessions with automatic daylight saving time adjustments. Visualize session overlaps and find optimal trading windows.</div>
-        <div class="tool-detail-why"><strong>Why use this?</strong> Trading during active sessions ensures better liquidity and volatility. Overlapping sessions (London-NY) offer the best trading conditions with highest volume.</div>
-      </div>
-    </div>
-    
-    <div class="tz-selector">
-      <label>Your Timezone</label>
-      <select class="fs" id="mh-tz" onchange="renderMarketHours()">
-        <option value="UTC">UTC (Coordinated Universal Time)</option>
-        <option value="America/New_York">New York (EST/EDT)</option>
-        <option value="Europe/London">London (GMT/BST)</option>
-        <option value="Asia/Tokyo">Tokyo (JST)</option>
-        <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
-        <option value="Asia/Dubai">Dubai (GST)</option>
-        <option value="Asia/Singapore">Singapore (SGT)</option>
-        <option value="Asia/Kolkata">India (IST)</option>
-      </select>
-    </div>
-    
-    <!-- Interactive Session Timeline -->
-    <div class="session-timeline-container">
-      <div class="timeline-header">
-        <span class="timeline-label">24-Hour Market Cycle</span>
-        <span class="timeline-current" id="timeline-current-time">--:--</span>
-      </div>
-      <div class="timeline-wrapper">
-        <div class="timeline-track" id="session-timeline">
-          <!-- Dynamic session bars will be rendered here -->
-        </div>
-        <div class="timeline-hours" id="timeline-hours">
-          <!-- Hour markers -->
-        </div>
-      </div>
-      <div class="timeline-legend" id="timeline-legend">
-        <!-- Legend items -->
-      </div>
-    </div>
-    
-    <!-- Session Cards Grid -->
-    <div id="mh-grid" class="market-grid"></div>
-    
-    <!-- Overlap Indicator -->
-    <div class="overlap-indicator" id="overlap-indicator">
-      <div class="overlap-title">🔥 Active Overlaps</div>
-      <div class="overlap-content" id="overlap-content"></div>
-    </div>
-    
-    <div class="dst-notice">
-      <div class="dst-icon">⏰</div>
-      <div class="dst-content">
-        <div class="dst-title">Automatic DST Adjustment</div>
-        <div class="dst-text">Session times automatically adjust for daylight saving time changes in each region. The system detects DST transitions for London (BST/GMT) and New York (EDT/EST).</div>
-      </div>
-    </div>
-  `;
-}
-
-function isDST(date,tz){
-  // Simple DST detection for major regions
-  if(tz==='America/New_York'||tz==='Europe/London'){
-    const jan=new Date(date.getFullYear(),0,1);
-    const jul=new Date(date.getFullYear(),6,1);
-    const stdOffset=-jan.getTimezoneOffset();
-    const dstOffset=-jul.getTimezoneOffset();
-    return stdOffset!==dstOffset&&(tz==='America/New_York'?date.getTimezoneOffset()===dstOffset:date.getTimezoneOffset()===dstOffset);
-  }
-  return false;
-}
-
-function getSessionTimes(session,tz){
-  // Session times in UTC, then convert to user timezone
-  const times={
-    'sydney':{open:21,close:6}, // 21:00-06:00 UTC
-    'tokyo':{open:0,close:9},   // 00:00-09:00 UTC
-    'london':{open:7,close:16}, // 07:00-16:00 UTC (adjusted for DST)
-    'newyork':{open:12,close:21} // 12:00-21:00 UTC (adjusted for DST)
-  };
-  
-  const t=times[session];
-  if(!t)return null;
-  
-  const now=new Date();
-  const tzOffset=tz==='UTC'?0:(now.toLocaleTimeString('en-US',{timeZone:tz,hour12:false}).split(':')[0]-now.getUTCHours());
-  
-  let openH=t.open+tzOffset;
-  let closeH=t.close+tzOffset;
-  if(openH>=24)openH-=24;
-  if(closeH>=24)closeH-=24;
-  if(openH<0)openH+=24;
-  if(closeH<0)closeH+=24;
-  
-  return {open:String(openH).padStart(2,'0')+':00',close:String(closeH).padStart(2,'0')+':00'};
-}
-
-function isSessionOpen(session){
-  const now=new Date();
-  const utcHour=now.getUTCHours();
-  const utcMin=now.getUTCMinutes();
-  const current=utcHour*100+utcMin;
-  
-  const sessions={
-    'sydney':{start:2100,end:600},
-    'tokyo':{start:0,end:900},
-    'london':{start:700,end:1600},
-    'newyork':{start:1200,end:2100}
-  };
-  
-  const s=sessions[session];
-  if(!s)return false;
-  
-  if(s.start<s.end)return current>=s.start&&current<s.end;
-  return current>=s.start||current<s.end;
-}
-
-function renderMarketHours(){
-  const tz=document.getElementById('mh-tz')?.value||'UTC';
-  const grid=document.getElementById('mh-grid');
-  const timeline=document.getElementById('session-timeline');
-  const hours=document.getElementById('timeline-hours');
-  const legend=document.getElementById('timeline-legend');
-  const currentTime=document.getElementById('timeline-current-time');
-  const overlapContent=document.getElementById('overlap-content');
-  
-  if(!grid)return;
-  
-  // Update current time
-  if(currentTime){
-    const now=new Date();
-    currentTime.textContent=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tz});
-  }
-  
-  const sessions=[
-    {id:'sydney',name:'Sydney',icon:'🇦🇺',color:'#10b981',start:21,end:6},
-    {id:'tokyo',name:'Tokyo',icon:'🇯🇵',color:'#f59e0b',start:0,end:9},
-    {id:'london',name:'London',icon:'🇬🇧',color:'#3b82f6',start:7,end:16},
-    {id:'newyork',name:'New York',icon:'🇺🇸',color:'#ef4444',start:12,end:21}
-  ];
-  
-  // Render timeline
-  if(timeline&&hours&&legend){
-    // Hour markers
-    hours.innerHTML=Array.from({length:25},(_,i)=>`<div class="timeline-hour-mark">${i%6===0?i:''}</div>`).join('');
-    
-    // Session bars on timeline
-    timeline.innerHTML=sessions.map(sess=>{
-      let startLeft=sess.start/24*100;
-      let width=((sess.end<=sess.start?24+sess.end:sess.end)-sess.start)/24*100;
-      return `<div class="timeline-session-bar" style="left:${startLeft}%;width:${width}%;background:${sess.color}" title="${sess.name}: ${sess.start}:00-${sess.end}:00 UTC"></div>`;
-    }).join('');
-    
-    // Current time indicator
-    const now=new Date();
-    const utcHour=now.getUTCHours()+now.getUTCMinutes()/60;
-    const currentLeft=utcHour/24*100;
-    timeline.innerHTML+=`<div class="timeline-current-indicator" style="left:${currentLeft}%"></div>`;
-    
-    // Legend
-    legend.innerHTML=sessions.map(sess=>`<div class="timeline-legend-item"><span class="legend-color" style="background:${sess.color}"></span><span>${sess.name}</span></div>`).join('');
-  }
-  
-  // Render session cards
-  grid.innerHTML=sessions.map(sess=>{
-    const times=getSessionTimes(sess.id,tz);
-    const open=isSessionOpen(sess.id);
-    const statusClass=open?'open':'closed';
-    const statusText=open?'Open':'Closed';
-    
-    return `
-      <div class="session-card ${statusClass}" style="--session-color:${open?'var(--green)':'var(--red)'}">
-        <div class="session-header">
-          <div class="session-icon">${sess.icon}</div>
-          <div class="session-name">${sess.name}</div>
-          <div class="session-badge ${statusClass}">${statusText}</div>
-        </div>
-        <div class="session-time">${times?times.open:'--:--'} - ${times?times.close:'--:--'}</div>
-        <div class="session-subtime">${tz}</div>
-        <div class="session-details">
-          <div class="session-detail-row"><span class="session-detail-label">Status:</span><span class="session-detail-value">${statusText}</span></div>
-          <div class="session-detail-row"><span class="session-detail-label">Next:</span><span class="session-detail-value">${open?'Close':'Open'}</span></div>
-        </div>
-      </div>
-    `;
-  }).join('');
-  
-  // Calculate and display overlaps
-  if(overlapContent){
-    const overlaps=findOverlaps(sessions);
-    if(overlaps.length>0){
-      overlapContent.innerHTML=overlaps.map(o=>`<div class="overlap-item"><span class="overlap-sessions">${o.sessions}</span><span class="overlap-time">${o.time}</span><span class="overlap-benefit">High liquidity period</span></div>`).join('');
-    }else{
-      overlapContent.innerHTML='<div class="overlap-none">No active overlaps at this time</div>';
-    }
-  }
-}
-
-function findOverlaps(sessions){
-  const now=new Date();
-  const utcHour=now.getUTCHours()+now.getUTCMinutes()/60;
-  const overlaps=[];
-  
-  // Check for each pair of sessions
-  for(let i=0;i<sessions.length;i++){
-    for(let j=i+1;j<sessions.length;j++){
-      const s1=sessions[i],s2=sessions[j];
-      const s1Start=s1.start,s1End=s1.end<=s1.start?24+s1.end:s1.end;
-      const s2Start=s2.start,s2End=s2.end<=s2.start?24+s2.end:s2.end;
-      
-      // Check if current time is in both sessions
-      const inS1=(utcHour>=s1Start||utcHour<s1End)&&(s1End>s1Start?utcHour>=s1Start&&utcHour<s1End:utcHour>=s1Start||utcHour<s1End);
-      const inS2=(utcHour>=s2Start||utcHour<s2End)&&(s2End>s2Start?utcHour>=s2Start&&utcHour<s2End:utcHour>=s2Start||utcHour<s2End);
-      
-      if(inS1&&inS2){
-        overlaps.push({sessions:`${s1.name} + ${s2.name}`,time:'Active now'});
-      }
-    }
-  }
-  
-  return overlaps;
-}
-
-function initMarketHours(){
-  // Set default timezone from settings
-  const tzSelect=document.getElementById('mh-tz');
-  if(tzSelect){
-    tzSelect.value=DB.settings.tz||'UTC';
-  }
-  renderMarketHours();
-  // Update every minute for session status, every second for current time indicator
-  setInterval(renderMarketHours,60000);
-  // Update current time indicator more frequently
-  setInterval(()=>{
-    const currentTime=document.getElementById('timeline-current-time');
-    const indicator=document.querySelector('.timeline-current-indicator');
-    if(currentTime){
-      const tz=document.getElementById('mh-tz')?.value||'UTC';
-      const now=new Date();
-      currentTime.textContent=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:tz});
-    }
-    if(indicator){
-      const now=new Date();
-      const utcHour=now.getUTCHours()+now.getUTCMinutes()/60;
-      const currentLeft=utcHour/24*100;
-      indicator.style.left=currentLeft+'%';
-    }
-  },1000);
-}
-
-function openGuideModal(){
-  const guideContent=`
-    <div style="padding:20px">
-      <h2 style="font-size:22px;font-weight:700;color:var(--t0);margin-bottom:8px">📖 How to Use FX Journal</h2>
-      <p style="color:var(--t2);margin-bottom:20px">Your complete guide to maximizing your trading journal experience</p>
-      
-      <div style="display:flex;flex-direction:column;gap:16px">
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px">
-          <h3 style="font-size:16px;font-weight:600;color:var(--accent2);margin-bottom:8px">📝 Logging Trades</h3>
-          <ul style="color:var(--t2);line-height:1.8;padding-left:20px">
-            <li>Click "＋ Trade" button or go to Trades page</li>
-            <li>Select pair, direction (Buy/Sell), and enter entry/exit prices</li>
-            <li>Add stop loss, take profit levels, and position size</li>
-            <li>Choose your setup type and trading session</li>
-            <li>Grade your trade execution (A+, A, B, C)</li>
-            <li>Note emotions felt during the trade</li>
-          </ul>
-        </div>
-        
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px">
-          <h3 style="font-size:16px;font-weight:600;color:var(--accent2);margin-bottom:8px">📊 Journaling Process</h3>
-          <ul style="color:var(--t2);line-height:1.8;padding-left:20px">
-            <li>Go to Journal tab to review pending trades</li>
-            <li>Click any trade to add detailed analysis</li>
-            <li>Document what worked and what didn't</li>
-            <li>Add screenshots of chart setups</li>
-            <li>Mark trades as "Done" after journaling</li>
-          </ul>
-        </div>
-        
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px">
-          <h3 style="font-size:16px;font-weight:600;color:var(--accent2);margin-bottom:8px">🧰 Using Tools</h3>
-          <ul style="color:var(--t2);line-height:1.8;padding-left:20px">
-            <li><strong>Position Calculator:</strong> Calculate proper lot sizes based on risk</li>
-            <li><strong>Gain/Loss Calculator:</strong> Project P&L before entering trades</li>
-            <li><strong>Market Hours:</strong> Track session times with auto-DST adjustment</li>
-          </ul>
-        </div>
-        
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px">
-          <h3 style="font-size:16px;font-weight:600;color:var(--accent2);margin-bottom:8px">📈 Analytics & Reports</h3>
-          <ul style="color:var(--t2);line-height:1.8;padding-left:20px">
-            <li>View performance metrics filtered by time period</li>
-            <li>Analyze best/worst pairs, sessions, and setups</li>
-            <li>Generate AI-powered trading reports</li>
-            <li>Track consistency and improvement over time</li>
-          </ul>
-        </div>
-        
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px">
-          <h3 style="font-size:16px;font-weight:600;color:var(--accent2);margin-bottom:8px">⚙️ Rules & Settings</h3>
-          <ul style="color:var(--t2);line-height:1.8;padding-left:20px">
-            <li>Set daily loss limits to prevent overtrading</li>
-            <li>Configure max trades per day</li>
-            <li>Customize sessions, pairs, and setups</li>
-            <li>Export data backups regularly</li>
-          </ul>
-        </div>
-      </div>
-      
-      <div style="margin-top:20px;text-align:center">
-        <button class="btn btn-p" onclick="this.closest('.overlay')?.classList.remove('open')">Got It!</button>
-      </div>
-    </div>
-  `;
-  
-  // Create modal if not exists
-  let modal=document.getElementById('guide-modal');
-  if(!modal){
-    modal=document.createElement('div');
-    modal.id='guide-modal';
-    modal.className='overlay';
-    modal.onclick=e=>{if(e.target===modal)modal.classList.remove('open')};
-    modal.innerHTML='<div class="modal modal-lg" id="guide-modal-content"></div>';
-    document.body.appendChild(modal);
-  }
-  
-  document.getElementById('guide-modal-content').innerHTML=guideContent;
-  modal.classList.add('open');
-}

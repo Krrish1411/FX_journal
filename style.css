@@ -156,7 +156,7 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;appearance
 .stat:hover{border-color:var(--border-s)}
 .stat-lbl{font-size:12px;font-weight:500;color:var(--t2);margin-bottom:8px;text-transform:none;letter-spacing:0}
 .stat-v{font-family:'Inter',system-ui,sans-serif;font-size:28px;font-weight:600;color:var(--t0);letter-spacing:-1px;line-height:1}
-.stat-v.pos{color:var(--t0)}.stat-v.neg{color:var(--t0)}.stat-v.acc{color:var(--t0)}.stat-v.gld{color:var(--t0)}
+.stat-v.pos{color:var(--green2)}.stat-v.neg{color:var(--red2)}.stat-v.acc{color:var(--accent2)}.stat-v.gld{color:var(--gold2)}
 .stat-sub{font-size:12px;color:var(--t3);margin-top:8px;font-weight:400}
 .stat-ico{position:absolute;right:20px;top:20px;font-size:20px;color:var(--t3);opacity:0.5}
 
